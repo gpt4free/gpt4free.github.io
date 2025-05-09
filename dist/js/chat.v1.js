@@ -2030,10 +2030,9 @@ function get_message_id() {
 };
 
 async function hide_sidebar(remove_shown=false) {
-    if (remove_shown) {
+    if (remove_shown && window.innerWidth < 640) { // Only apply on mobile
         sidebar.classList.remove("shown");
     }
-    sidebar_buttons.forEach((el)=>el.classList.remove("rotated"))
     settings.classList.add("hidden");
     chat.classList.remove("hidden");
     log_storage.classList.add("hidden");
@@ -2049,16 +2048,30 @@ async function hide_settings() {
     Array.from(provider_forms).forEach((form) => form.classList.add("hidden"));
 }
 
-
-sidebar_buttons.forEach((el)=>el.addEventListener("click", async () => {
-    if (sidebar.classList.contains("shown") || el.classList.contains("rotated")) {
-        await hide_sidebar(true);
-        chat.classList.remove("hidden");
-    } else {
-        await show_menu();
-        chat.classList.add("hidden");
+sidebar_buttons.forEach((el) => el.addEventListener("click", async () => {
+    // For desktop
+    if (window.innerWidth >= 640) {
+        // Toggle between shown and minimized only
+        if (sidebar.classList.contains("shown")) {
+            // Change from shown to minimized
+            sidebar.classList.remove("shown");
+            sidebar.classList.add("minimized");
+        } else {
+            // Change from minimized to shown
+            sidebar.classList.remove("minimized");
+            sidebar.classList.add("shown");
+        }
+    } 
+    // For mobile
+    else {
+        if (sidebar.classList.contains("shown")) {
+            // Hide sidebar on mobile
+            sidebar.classList.remove("shown");
+        } else {
+            // Show sidebar on mobile
+            sidebar.classList.add("shown");
+        }
     }
-    window.scrollTo(0, 0);
 }));
 
 function add_url_to_history(url) {
@@ -2069,7 +2082,7 @@ function add_url_to_history(url) {
 
 async function show_menu() {
     sidebar.classList.add("shown");
-    sidebar_buttons.forEach((el)=>el.classList.add("rotated"))
+    sidebar.classList.remove("minimized");
     await hide_settings();
     add_url_to_history("#menu");
 }
@@ -2330,6 +2343,20 @@ window.addEventListener('load', async function() {
         await load_conversations();
     }
     await load_conversation(window.conversation_id);
+    
+    // Set default sidebar state based on screen size
+    if (window.innerWidth >= 640) { // 40em = 640px
+        sidebar.classList.add("shown");
+        sidebar.classList.remove("minimized");
+    } else {
+        sidebar.classList.remove("shown");
+    }
+    // Ensure sidebar is shown by default on desktop
+    if (window.innerWidth >= 640) { // 40em = 640px
+        sidebar.classList.add("shown");
+        sidebar.classList.remove("minimized");
+    }
+    
 });
 
 let refreshOnHidden = true;
@@ -2396,6 +2423,11 @@ async function on_load() {
     if (window.hljs) {
         hljs.addPlugin(new HtmlRenderPlugin())
         hljs.addPlugin(new CopyButtonPlugin());
+    }
+    // Ensure sidebar is shown by default on desktop
+    if (window.innerWidth >= 640) {
+        sidebar.classList.add("shown");
+        sidebar.classList.remove("minimized");
     }
 }
 
@@ -3371,3 +3403,523 @@ document.getElementById("showLog").addEventListener("click", ()=> {
     settings.classList.add("hidden");
     log_storage.scrollTop = log_storage.scrollHeight;
 });
+
+// Mobile Experience Enhancements
+
+// Create overlay element for sidebar
+function createSidebarOverlay() {
+  const overlay = document.createElement('div');
+  overlay.className = 'sidebar-overlay';
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('shown');
+    overlay.classList.remove('active');
+  });
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+// Initialize mobile enhancements
+function initMobileEnhancements() {
+  const overlay = createSidebarOverlay();
+  
+  // Enhance sidebar toggle behavior
+  sidebar_buttons.forEach((el) => {
+    el.removeEventListener('click', null);
+    el.addEventListener('click', () => {
+      if (window.innerWidth < 640) {
+        if (sidebar.classList.contains('shown')) {
+          sidebar.classList.remove('shown');
+          overlay.classList.remove('active');
+        } else {
+          sidebar.classList.add('shown');
+          overlay.classList.add('active');
+        }
+      } else {
+        // Desktop behavior remains the same
+        if (sidebar.classList.contains('shown')) {
+          sidebar.classList.remove('shown');
+          sidebar.classList.add('minimized');
+        } else {
+          sidebar.classList.remove('minimized');
+          sidebar.classList.add('shown');
+        }
+      }
+    });
+  });
+  
+  // Add swipe gesture support
+  let touchStartX = 0;
+  let touchEndX = 0;
+  
+  document.addEventListener('touchstart', e => {
+    touchStartX = e.changedTouches[0].screenX;
+  }, { passive: true });
+  
+  document.addEventListener('touchend', e => {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipeGesture();
+  }, { passive: true });
+  
+  function handleSwipeGesture() {
+    const swipeThreshold = 100;
+    
+    // Right swipe (from left edge) - open sidebar
+    if (touchEndX - touchStartX > swipeThreshold && touchStartX < 30) {
+      sidebar.classList.add('shown');
+      overlay.classList.add('active');
+    }
+    
+    // Left swipe - close sidebar
+    if (touchStartX - touchEndX > swipeThreshold && sidebar.classList.contains('shown')) {
+      sidebar.classList.remove('shown');
+      overlay.classList.remove('active');
+    }
+  }
+  
+  // Double tap to scroll to bottom
+  let lastTap = 0;
+  chatBody.addEventListener('touchend', e => {
+    const currentTime = new Date().getTime();
+    const tapLength = currentTime - lastTap;
+    
+    if (tapLength < 300 && tapLength > 0) {
+      // Double tap detected
+      scroll_to_bottom();
+      e.preventDefault();
+    }
+    
+    lastTap = currentTime;
+  });
+  
+  // Improve file input experience on mobile
+  const fileLabels = document.querySelectorAll('.file-label');
+  fileLabels.forEach(label => {
+    label.addEventListener('touchstart', () => {
+      label.classList.add('active-touch');
+    });
+    
+    label.addEventListener('touchend', () => {
+      setTimeout(() => {
+        label.classList.remove('active-touch');
+      }, 200);
+    });
+  });
+}
+
+// Call this function after the DOM is loaded
+window.addEventListener('load', () => {
+  if (window.matchMedia('(max-width: 640px)').matches || window.matchMedia('(pointer: coarse)').matches) {
+    initMobileEnhancements();
+  }
+});
+
+// Handle orientation changes
+window.addEventListener('orientationchange', () => {
+  // Adjust UI based on new orientation
+  setTimeout(() => {
+    document.querySelector(".container").style.maxHeight = window.innerHeight + "px";
+    
+    // Adjust media content display
+    adjustMediaContentForOrientation();
+  }, 200);
+});
+
+// Adaptive Media Content Display
+
+// Function to adjust media content based on screen size and orientation
+function adjustMediaContentForOrientation() {
+  const isLandscape = window.innerWidth > window.innerHeight;
+  const mediaElements = document.querySelectorAll('.message .content img, .message .content video');
+  
+  mediaElements.forEach(media => {
+    // Reset styles first
+    media.style.maxWidth = '';
+    media.style.maxHeight = '';
+    
+    // Get natural dimensions
+    const naturalWidth = media.naturalWidth || media.videoWidth || 400;
+    const naturalHeight = media.naturalHeight || media.videoHeight || 300;
+    const aspectRatio = naturalWidth / naturalHeight;
+    
+    if (isLandscape) {
+      // In landscape, prioritize height
+      media.style.maxHeight = '70vh';
+      media.style.maxWidth = '90vw';
+    } else {
+      // In portrait, limit width more strictly
+      media.style.maxWidth = '95vw';
+      media.style.maxHeight = '50vh';
+    }
+    
+    // Add special class for better display
+    media.classList.add('adaptive-media');
+  });
+}
+
+// Function to enhance image viewing experience
+function enhanceMobileImageViewing() {
+  // Improve image tap behavior
+  document.addEventListener('click', e => {
+    const target = e.target;
+    
+    // Check if clicked element is an image in a message
+    if (target.tagName === 'IMG' && target.closest('.message')) {
+      // Don't apply to avatar images
+      if (target.alt === 'your avatar') return;
+      
+      // Toggle fullscreen-like view
+      if (target.classList.contains('expanded-view')) {
+        target.classList.remove('expanded-view');
+      } else {
+        // Remove expanded view from any other images
+        document.querySelectorAll('.expanded-view').forEach(img => {
+          img.classList.remove('expanded-view');
+        });
+        
+        target.classList.add('expanded-view');
+      }
+    } else if (!target.closest('img.expanded-view')) {
+      // Close expanded view when clicking elsewhere
+      document.querySelectorAll('.expanded-view').forEach(img => {
+        img.classList.remove('expanded-view');
+      });
+    }
+  });
+}
+
+// Register these functions to run after content is loaded
+function registerMediaEnhancements() {
+  // Run initially
+  adjustMediaContentForOrientation();
+  enhanceMobileImageViewing();
+  
+  // Also run when new messages are added
+  const originalRegisterMessageImages = register_message_images;
+  register_message_images = function() {
+    originalRegisterMessageImages();
+    adjustMediaContentForOrientation();
+  };
+  
+  // And when window is resized
+  window.addEventListener('resize', adjustMediaContentForOrientation);
+}
+
+// Add this to the window load event
+window.addEventListener('load', registerMediaEnhancements);
+
+// Mobile Experience Initialization
+
+// Function to check if device is mobile
+function isMobileDevice() {
+  return window.matchMedia('(max-width: 640px)').matches || 
+         window.matchMedia('(pointer: coarse)').matches;
+}
+
+// Function to apply mobile-specific enhancements
+function applyMobileEnhancements() {
+  // Add mobile class to body for CSS targeting
+  document.body.classList.add('mobile-device');
+  
+  // Adjust height for mobile browsers (handles address bar)
+  function setMobileHeight() {
+    document.querySelector(".container").style.maxHeight = window.innerHeight + "px";
+    document.querySelector(".container").style.height = window.innerHeight + "px";
+  }
+  
+  setMobileHeight();
+  window.addEventListener('resize', setMobileHeight);
+  
+  // Improve scroll behavior
+  const chatBody = document.getElementById('chatBody');
+  chatBody.style.overscrollBehavior = 'contain';
+  
+  // Enhance touch feedback for all interactive elements
+  const touchElements = document.querySelectorAll('button, .file-label, .micro-label, select, .convo');
+  touchElements.forEach(el => {
+    el.addEventListener('touchstart', () => {
+      el.classList.add('active-touch');
+    }, { passive: true });
+    
+    el.addEventListener('touchend', () => {
+      setTimeout(() => {
+        el.classList.remove('active-touch');
+      }, 200);
+    }, { passive: true });
+  });
+  
+  // Optimize input field behavior
+  const userInput = document.getElementById('userInput');
+  userInput.addEventListener('focus', () => {
+    // Small delay to ensure keyboard is open
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
+    }, 300);
+  });
+  
+  // Show/hide floating action button based on scroll position
+  let lastScrollTop = 0;
+  const floatingButton = document.querySelector('.new_convo_icon.mobile-only');
+  if (floatingButton) {
+    chatBody.addEventListener('scroll', () => {
+      const st = chatBody.scrollTop;
+      if (st > lastScrollTop && st > 100) {
+        // Scrolling down - hide button
+        floatingButton.style.transform = 'translateY(80px)';
+      } else {
+        // Scrolling up - show button
+        floatingButton.style.transform = 'translateY(0)';
+      }
+      lastScrollTop = st;
+    }, { passive: true });
+  }
+}
+
+// Initialize mobile enhancements if on mobile device
+document.addEventListener('DOMContentLoaded', () => {
+  if (isMobileDevice()) {
+    applyMobileEnhancements();
+    initMobileEnhancements(); // From previous code
+  }
+  
+  // Add CSS class based on orientation
+  function updateOrientationClass() {
+    if (window.innerWidth > window.innerHeight) {
+      document.body.classList.add('landscape');
+      document.body.classList.remove('portrait');
+    } else {
+      document.body.classList.add('portrait');
+      document.body.classList.remove('landscape');
+    }
+  }
+  
+  updateOrientationClass();
+  window.addEventListener('resize', updateOrientationClass);
+  window.addEventListener('orientationchange', updateOrientationClass);
+});
+
+// Create drag-and-drop zones
+function setupDragAndDrop() {
+    const dropZone = document.createElement('div');
+    dropZone.className = 'file-drop-zone hidden';
+    dropZone.innerHTML = `
+        <div class="file-drop-content">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <p>Drop files here to upload</p>
+        </div>
+    `;
+    document.querySelector('.container').appendChild(dropZone);
+    
+    // Add CSS for drop zone
+    const dropZoneStyles = document.createElement('style');
+    dropZoneStyles.textContent = `
+        .file-drop-zone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .file-drop-zone.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .file-drop-zone.drag-over {
+            background-color: rgba(139, 61, 255, 0.3);
+        }
+        
+        .file-drop-content {
+            background-color: var(--blur-bg);
+            border: 2px dashed var(--accent);
+            border-radius: var(--border-radius-1);
+            padding: 40px;
+            text-align: center;
+            color: var(--colour-3);
+            max-width: 80%;
+        }
+        
+        .file-drop-content i {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+        
+        .file-drop-content p {
+            font-size: 18px;
+            margin: 0;
+        }
+        
+        /* Add highlight to chat area when dragging */
+        .chat-body.drag-highlight {
+            border: 2px dashed var(--accent);
+            background-color: rgba(139, 61, 255, 0.1);
+        }
+    `;
+    document.head.appendChild(dropZoneStyles);
+    
+    // Handle drag and drop events
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('active');
+        dropZone.classList.add('drag-over');
+    };
+    
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('drag-over');
+        
+        // Check if the drag left the document
+        const rect = dropZone.getBoundingClientRect();
+        const x = e.clientX;
+        const y = e.clientY;
+        
+        if (
+            x < rect.left ||
+            x >= rect.right ||
+            y < rect.top ||
+            y >= rect.bottom
+        ) {
+            dropZone.classList.remove('active');
+        }
+    };
+    
+    const handleDrop = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        dropZone.classList.remove('active');
+        dropZone.classList.remove('drag-over');
+        chatBody.classList.remove('drag-highlight');
+        
+        if (e.dataTransfer.files.length > 0) {
+            // Handle image files
+            const imageFiles = Array.from(e.dataTransfer.files).filter(file => 
+                file.type.startsWith('image/')
+            );
+            
+            if (imageFiles.length > 0) {
+                imageFiles.forEach(file => {
+                    image_storage[URL.createObjectURL(file)] = file;
+                });
+                renderMediaSelect();
+                mediaSelect.classList.remove('hidden');
+            }
+            
+            // Handle other files
+            const otherFiles = Array.from(e.dataTransfer.files).filter(file => 
+                !file.type.startsWith('image/')
+            );
+            
+            if (otherFiles.length > 0) {
+                // Create a new FileList-like object
+                const dataTransfer = new DataTransfer();
+                otherFiles.forEach(file => dataTransfer.items.add(file));
+                
+                // Set the files to the file input
+                fileInput.files = dataTransfer.files;
+                
+                // Trigger the change event
+                const event = new Event('change', { bubbles: true });
+                fileInput.dispatchEvent(event);
+            }
+        }
+    };
+    
+    // Add event listeners to document
+    document.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('active');
+        chatBody.classList.add('drag-highlight');
+    });
+    
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('drop', handleDrop);
+    
+    // Add specific handling for chat body
+    chatBody.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatBody.classList.add('drag-highlight');
+    });
+    
+    chatBody.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatBody.classList.remove('drag-highlight');
+    });
+}
+
+// Initialize drag and drop
+setupDragAndDrop();
+
+// Enhance the existing file upload functionality
+function enhanceFileUpload() {
+    // Add visual feedback when files are being processed
+    const originalUploadFiles = upload_files;
+    upload_files = async function(fileInput) {
+        // Show loading indicator
+        const loadingIndicator = document.createElement('div');
+        loadingIndicator.className = 'file-upload-loading';
+        loadingIndicator.innerHTML = `
+            <div class="upload-spinner"></div>
+            <p>Uploading files...</p>
+        `;
+        document.body.appendChild(loadingIndicator);
+        
+        try {
+            await originalUploadFiles(fileInput);
+        } finally {
+            // Remove loading indicator
+            document.body.removeChild(loadingIndicator);
+        }
+    };
+    
+    // Add CSS for loading indicator
+    const loadingStyles = document.createElement('style');
+    loadingStyles.textContent = `
+        .file-upload-loading {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: var(--blur-bg);
+            border-radius: var(--border-radius-1);
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+        
+        .upload-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--colour-3);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spinner 0.8s linear infinite;
+        }
+        
+        .file-upload-loading p {
+            margin: 0;
+            color: var(--colour-3);
+        }
+    `;
+    document.head.appendChild(loadingStyles);
+}
+
+enhanceFileUpload();

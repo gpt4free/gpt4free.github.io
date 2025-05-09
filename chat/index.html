@@ -70,9 +70,10 @@
     <script async>
         localStorage.getItem("darkMode") == "false" ? document.body.classList.add("white") : null;
     </script>
+    <div class="media-overlay"></div>
     <div class="gradient"></div>
     <div class="container">
-        <div class="sidebar shown">
+        <div class="sidebar">
             <div class="sidebar-container">
                 <div class="sidebar-header">
                     <div class="sidebar-logo" data-translate="true">G4F Chat</div>
@@ -92,7 +93,7 @@
                 </div>
                 <div class="bottom_buttons">
                     <button onclick="open_settings();">
-                        <i class="fa-solid fa-toolbox"></i>
+                        <i class="fa-solid fa-gear"></i>
                         <span>Open Settings</span>
                     </button>
                     <div class="info">
@@ -312,7 +313,9 @@
                         <label class="micro-label" for="micro">
                             <i class="fa-solid fa-microphone-slash"></i>
                         </label>
-                        <button class="code">```</button>
+                        <button class="code" title="Insert code block">
+                            <i class="fa-solid fa-code"></i>
+                        </button>
                         <div class="send-buttons">
                             <button id="addButton">
                                 <i class="fa-solid fa-square-plus"></i>

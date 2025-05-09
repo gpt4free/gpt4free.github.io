@@ -112,16 +112,17 @@ body:not(.white) a:visited{
 }
 
 .new_version {
-    position: absolute;
-    left: 0;
-    top: 0;
-    padding: 10px;
-    font-weight: 500;
-    background-color: rgba(0, 0, 0, 0.5);
-    color: var(--colour-3);
-    border: var(--colour-1) 1px solid;
-    border-radius: var(--border-radius-1);
-    z-index: 1;
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 10px;
+  font-weight: 500;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: var(--colour-3);
+  border: var(--colour-1) 1px solid;
+  border-radius: var(--border-radius-1);
+  z-index: 1100; /* Higher than sidebar (1001) */
+  pointer-events: auto; /* Ensure it's clickable even when sidebar is shown */
 }
 
 .white .new_version {
@@ -700,13 +701,37 @@ label[for="micro"] {
 }
 
 .code {
+    cursor: pointer;
+    position: absolute;
     top: 76px;
     padding: 4px 0;
+    left: 8px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: monospace;
     font-weight: bold;
     height: 20px;
+    font-size: 12px;
+    color: var(--colour-3);
+    background-color: var(--blur-bg);
+    border: 1px solid var(--blur-border);
+    border-radius: var(--border-radius-1);
+    transition: all 0.2s ease;
+    padding: 0;
+    overflow: hidden;
 }
+
 .code:hover {
     border-color: var(--accent);
+    background-color: var(--accent);
+    color: white;
+}
+
+.code:active {
+    transform: scale(0.95);
 }
 
 @media (pointer:none), (pointer:coarse) {
@@ -1705,4 +1730,443 @@ form textarea {
     font-weight: 600;
     font-size: 18px;
     margin-left: 8px;
+}
+
+.sidebar {
+    border: 1px solid var(--blur-border);
+}
+
+.sidebar.minimized {
+    width: 60px;
+    overflow: hidden;
+}
+
+.sidebar.minimized .sidebar-container {
+    align-items: center;
+    padding: 15px 0;
+}
+
+.sidebar.minimized .sidebar-logo,
+.sidebar.minimized .convo-title,
+.sidebar.minimized .new_convo span,
+.sidebar.minimized .bottom_buttons span,
+.sidebar.minimized .info span,
+.sidebar.minimized .datetime {
+    display: none;
+}
+
+.sidebar.minimized .sidebar-header {
+    justify-content: center;
+    border-bottom: none;
+    margin-bottom: 20px;
+}
+
+.sidebar.minimized .convo .left {
+    justify-content: center;
+}
+
+.sidebar.minimized .new_convo,
+.sidebar.minimized .bottom_buttons button,
+.sidebar.minimized .info {
+    justify-content: center;
+    gap: 0;
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 10px;
+}
+
+.sidebar.minimized .fa-ellipsis-vertical,
+.sidebar.minimized .choise {
+    display: none;
+}
+
+.sidebar.minimized .top {
+    align-items: center;
+}
+
+.sidebar.minimized i {
+    font-size: 1.2em;
+}
+
+.sidebar.minimized .mobile-sidebar-toggle {
+    margin: 0;
+}
+
+/* Add some spacing between icon groups */
+.sidebar.minimized .top {
+    margin-bottom: 30px;
+}
+
+.sidebar.minimized .bottom_buttons {
+    margin-top: auto;
+}
+
+.sidebar.minimized .info,
+.sidebar.minimized .convo {
+    display: none;
+}
+
+/* Hide new_convo_icon on desktop */
+@media only screen and (min-width: 40em) {
+    .chat-top-panel .new_convo_icon {
+        display: none;
+    }
+}
+
+/* Default state for desktop: sidebar shown */
+@media only screen and (min-width: 40em) {
+    .sidebar {
+        width: 300px;
+    }
+    
+    /* Hide new_convo_icon on desktop */
+    .chat-top-panel .new_convo_icon {
+        display: none;
+    }
+}
+
+/* Default state for mobile: sidebar hidden/minimized */
+@media only screen and (max-width: 40em) {
+    .sidebar:not(.shown) {
+        width: 0;
+    }
+    
+    .sidebar.minimized {
+        width: 60px;
+    }
+}
+
+.sidebar.minimized .info,
+.sidebar.minimized .convo {
+    display: none;
+}
+
+/* Ensure sidebar is shown by default on desktop */
+@media only screen and (min-width: 40em) {
+    .sidebar {
+        width: 300px;
+    }
+    
+    .sidebar:not(.minimized) {
+        width: 300px;
+    }
+}
+
+/* Mobile Optimization Enhancements */
+@media only screen and (max-width: 640px) {
+  /* Improved sidebar behavior */
+  .sidebar {
+    position: fixed;
+    z-index: 1001; /* Higher z-index to appear above everything */
+    height: 100vh;
+    background: var(--background);
+    transition: transform 0.3s ease, width 0.3s ease;
+    transform: translateX(-100%);
+    width: 85%;
+    max-width: 300px;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  .sidebar.shown {
+    transform: translateX(0);
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+    width: 100%;
+    max-width: 100%;
+    left: 0;
+    right: 0;
+  }
+
+  /* Improved chat container for mobile */
+  .chat-container {
+    width: 100%;
+    padding: 0;
+    position: relative;
+    z-index: 900; /* Lower z-index than sidebar */
+  }
+  
+  /* When sidebar is shown, ensure chat container stays behind */
+  .sidebar.shown ~ .chat-container {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Prevent interaction with chat when sidebar is shown */
+    visibility: hidden; /* Hide all chat elements when sidebar is shown */
+  }
+  
+  /* Better spacing for messages on mobile */
+  .message {
+    padding: var(--inner-gap) 12px;
+  }
+  
+  /* Hide specific elements when sidebar is shown */
+  .sidebar.shown ~ .chat-container .regenerate,
+  .sidebar.shown ~ .chat-container .stop_generating,
+  .sidebar.shown ~ .chat-container .chat-buttons,
+  .sidebar.shown ~ .chat-container .chat-footer {
+    display: none !important;
+  }
+  
+  /* Optimize media display */
+  .message .content img, 
+  .message .content video {
+    max-width: 100%;
+    height: auto;
+  }
+  
+  /* Improve code blocks display */
+  .message .content pre {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure regenerate button and other floating elements stay below sidebar */
+  .stop_generating, 
+  .regenerate, 
+  .new_convo_icon,
+  .chat-buttons button {
+    z-index: 950; /* Below sidebar and overlay */
+  }
+  
+  /* Fix for container positioning */
+  .container {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  /* Ensure sidebar content is properly displayed */
+  .sidebar-container {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    box-sizing: border-box;
+  }
+  
+  /* Ensure sidebar toggle button stays visible */
+  .mobile-sidebar-toggle {
+    z-index: 1002;
+    position: relative;
+  }
+  
+  /* Prevent scrolling of background content when sidebar is open */
+  body:has(.sidebar.shown) {
+    overflow: hidden;
+  }
+  
+  /* Alternative for browsers that don't support :has */
+  .sidebar.shown ~ body {
+    overflow: hidden;
+  }
+  
+  /* Make sure settings panel also stays below sidebar */
+  .settings {
+    z-index: 900;
+  }
+  
+  /* Ensure proper stacking for all UI elements */
+  .chat-top-panel {
+    position: relative;
+    z-index: 950;
+  }
+  
+  /* Ensure .new_version stays on top on mobile too */
+  .new_version {
+    z-index: 1100;
+    position: fixed; /* Fixed position on mobile */
+    top: 10px; /* A bit down from the top for better visibility */
+    right: 10px;
+  }
+}
+
+/* Additional Mobile Enhancements */
+
+/* Touch feedback */
+.active-touch {
+  opacity: 0.7;
+  transform: scale(0.97);
+}
+
+/* Expanded image view */
+.expanded-view {
+  position: fixed !important;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 95vw !important;
+  max-height: 90vh !important;
+  z-index: 2000;
+  background-color: rgba(0, 0, 0, 0.8);
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Overlay for expanded images */
+.media-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1999;
+  display: none;
+}
+
+.media-overlay.active {
+  display: block;
+}
+
+/* Adaptive media styling */
+.adaptive-media {
+  transition: all 0.3s ease;
+}
+
+/* Improved mobile form elements */
+@media (max-width: 640px) {
+  /* Better input focus states */
+  input:focus, 
+  textarea:focus, 
+  select:focus {
+    outline: 2px solid var(--accent);
+  }
+  
+  /* Improved button feedback */
+  button:active {
+    transform: scale(0.97);
+  }
+  
+  /* Better spacing for message actions */
+  .message .content .count {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  
+  /* Hide scrollbar but keep functionality */
+  .chat-body::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  /* Optimize code blocks */
+  pre {
+    margin: 8px 0 !important;
+  }
+  
+  /* Improve message spacing */
+  .message {
+    margin-bottom: 8px;
+  }
+}
+
+/* Optimize for different device orientations */
+@media (orientation: landscape) and (max-height: 500px) {
+  /* Adjust for landscape on phones */
+  .chat-footer {
+    padding: 4px;
+  }
+  
+  .user-input {
+    max-height: 80px;
+  }
+  
+  #userInput {
+    max-height: 60px;
+  }
+  
+  .message {
+    padding: 8px;
+  }
+}
+
+/* Fix for message layout in portrait mobile view */
+@media only screen and (max-width: 640px) and (orientation: portrait) {
+  /* Make messages display in row direction (side by side) like in landscape */
+  .message {
+    display: flex;
+    flex-direction: row;
+    padding: 10px 8px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  /* Adjust avatar size and positioning */
+  .message .user,
+  .message .assistant {
+    max-width: 36px;
+    max-height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    margin-right: 8px;
+    flex-shrink: 0;
+  }
+  
+  /* Adjust the avatar image size */
+  .message .user img,
+  .message .assistant img {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+  }
+  
+  /* Ensure content takes appropriate space */
+  .message .content {
+    flex: 1;
+    width: auto;
+    min-width: 0; /* Allow content to shrink if needed */
+  }
+  
+  /* Fix content inner to prevent overflow */
+  .message .content_inner {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  /* Fix icon positioning */
+  .message .user i,
+  .message .assistant i {
+    font-size: 10px;
+    bottom: -4px;
+    right: -4px;
+  }
+  
+  /* Override any column direction that might be set elsewhere */
+  .message.flex-column {
+    flex-direction: row !important;
+  }
+  
+  /* Fix for message count display */
+  .message .count {
+    font-size: 10px;
+    margin-top: 4px;
+  }
+  
+  /* Ensure proper spacing for nested elements */
+  .message .content > * {
+    margin-bottom: 4px;
+  }
+}
+
+/* Additional fix for very small screens */
+@media only screen and (max-width: 360px) {
+  .message .user,
+  .message .assistant {
+    max-width: 32px;
+    max-height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+  
+  .message .user img,
+  .message .assistant img {
+    width: 32px;
+    height: 32px;
+  }
 }

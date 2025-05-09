@@ -7,11 +7,116 @@
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
     <script src="dist/js/framework.js" async></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
-        video { width: 400px; height: 400px; border: 1px solid black; display: block; margin: auto; object-fit: cover; max-width: 100%;}
-        #qrcode { margin-top: 20px; }
-        #qrcode img, #qrcode canvas { margin: 0 auto; width: 400px; height: 400px; max-width: 100%;}
-        button { margin: 5px; padding: 10px; }
+        :root {
+            --colour-1: #000000;
+            --colour-2: #ccc;
+            --colour-3: #e4d4ff;
+            --colour-4: #f0f0f0;
+            --colour-5: #181818;
+            --colour-6: #242424;
+            --accent: #8b3dff;
+            --blur-bg: #16101b66;
+            --blur-border: #84719040;
+            --background: #16101b;
+            --text-color: #e4d4ff;
+            --border-color: #84719040;
+            --button-bg: #242424;
+            --button-hover: #181818;
+            --button-text: #e4d4ff;
+            --border-radius: 8px;
+        }
+
+        /* Light theme */
+        body.white {
+            --colour-1: #ffffff;
+            --colour-3: #212529;
+            --accent: #007bff;
+            --blur-bg: transparent;
+            --blur-border: #ccc;
+            --background: #ffffff;
+            --text-color: #212529;
+            --border-color: #ccc;
+            --button-bg: #f0f0f0;
+            --button-hover: #e0e0e0;
+            --button-text: #212529;
+        }
+
+        body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            margin: 20px; 
+            background-color: var(--background);
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+        }
+        
+        video { 
+            width: 400px; 
+            height: 400px; 
+            border: 1px solid var(--border-color); 
+            display: block; 
+            margin: auto; 
+            object-fit: cover; 
+            max-width: 100%;
+            border-radius: var(--border-radius);
+        }
+        
+        #qrcode { 
+            margin-top: 20px; 
+            background-color: white;
+            padding: 10px;
+            display: inline-block;
+            border-radius: var(--border-radius);
+        }
+        
+        #qrcode img, #qrcode canvas { 
+            margin: 0 auto; 
+            width: 400px; 
+            height: 400px; 
+            max-width: 100%;
+        }
+        
+        button { 
+            margin: 5px; 
+            padding: 10px; 
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: var(--button-hover);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        h1, h2 {
+            color: var(--text-color);
+        }
+        
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        #cam-status, #qrcode-status {
+            margin: 10px 0;
+            padding: 5px;
+            border-radius: var(--border-radius);
+            background-color: var(--blur-bg);
+            border: 1px solid var(--blur-border);
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -43,6 +148,33 @@
         const videoElem = document.getElementById('video');
         const camStatus = document.getElementById('cam-status');
         let qrScanner;
+
+        // Function to synchronize the theme
+        function syncTheme() {
+            const isDarkMode = localStorage.getItem("darkMode") !== "false";
+            if (isDarkMode) {
+                document.body.classList.remove("white");
+            } else {
+                document.body.classList.add("white");
+            }
+        }
+
+        // Initial synchronization of the theme
+        syncTheme();
+
+        // Tracking theme changes via localStorage
+        window.addEventListener('storage', function(e) {
+            if (e.key === "darkMode") {
+                syncTheme();
+            }
+        });
+
+        // If the page is opened in an iframe, we listen to messages from the parent window
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'themeChange') {
+                syncTheme();
+            }
+        });
 
         document.getElementById('stopCamera').addEventListener('click', () => {
             if (currentStream) {
