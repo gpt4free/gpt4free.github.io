@@ -14,7 +14,6 @@
 | [https://g4f.dev/api/nvidia](https://g4f.dev/api/nvidia/models) | none required | Use Nvidia provider |
 | [https://g4f.dev/api/gemini](https://g4f.dev/ai/gemini) | none required | Hosted Gemini provider |
 | [https://g4f.dev/api/gpt-oss-120b](https://g4f.dev/api/gpt-oss-120b/models) | required | now requires API key from [g4f.dev/api_key](https://g4f.dev/api_key.html) |
-| [https://g4f.dev/api/Azure](https://g4f.dev/api/Azure/models) | required | Use Azure on my bill, get key from [g4f.dev/api_key](https://g4f.dev/api_key.html) |
 | [https://g4f.dev/v1](https://g4f.dev/v1/models) | required | Hosted instance, many models, get key from [g4f.dev/api_key](https://g4f.dev/api_key.html) |
 
 ### Also Supported API Routes:
@@ -32,17 +31,19 @@
 - **Auto Provider & Model Selection**: apiEndpoint: https://g4f.dev/ai/{now}
 
 ### Individual clients available for:
-- Pollinations AI
-- Puter AI  
-- HuggingFace
-- Ollama
+- [Pollinations AI](providers/pollinations.md)
+- [Puter AI](providers/puter.md)
+- [HuggingFace](providers/huggingface.md)
+- [Ollama](providers/ollama.md)
+- [Gemini](providers/gemini.md)
+- [OpenAI Chat](providers/openai.md)
+- [Perplexity](providers/perplexity.md)
 
 ### How to choose a base URL
 - If you want a local or self-hosted instance, you can use:
   - https://localhost:1337/v1
 - If you want a free or public provider, you can use one of the g4f.dev endpoints (e.g., groq, ollama, pollinations.ai, nvidia, grok).
 - If you want Azure-backed usage or hosted instances, use:
-  - https://g4f.dev/api/Azure (requires API key)
   - https://g4f.dev/v1 (requires API key)
 
 ### API usage basics

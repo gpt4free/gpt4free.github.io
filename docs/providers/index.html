@@ -3,43 +3,34 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Documentation: API endpoints and usage</title>
+    <title>GPT4Free Documentation Hub | Providers</title>
 
-    <meta name="description" content="GPT4Free documentation for Documentation: API endpoints and usage. Complete guides, examples, and API reference for free AI endpoints, code generation, and AI model integration." />
-    <meta name="keywords" content="GPT4Free, G4F, AI documentation, free AI API, OpenAI alternative, JavaScript AI client, Python AI library, AI integration, code generation, Documentation: API endpoints and usage" />
+    <meta name="description" content="Review section of GPT4Free documentation. Complete guides, examples, and API reference for free AI endpoints, code generation, and AI model integration." />
+    <meta name="keywords" content="GPT4Free, G4F, AI documentation, free AI API, OpenAI alternative, JavaScript AI client, Python AI library, AI integration, code generation, G4F - AsyncClient API Guide" />
     <meta name="author" content="GPT4Free Team" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="article" />
-    <meta property="og:title" content="Documentation: API endpoints and usage | GPT4Free Documentation" />
-    <meta property="og:description" content="GPT4Free documentation for Documentation: API endpoints and usage. Free AI endpoints, examples, and comprehensive guides." />
-    <meta property="og:url" content="https://g4f.dev/docs/ready_to_use.html" />
+    <meta property="og:title" content="GPT4Free Documentation Hub | Providers" />
+    <meta property="og:description" content="Providers section of GPT4Free documentation. Free AI endpoints, examples, and comprehensive guides." />
+    <meta property="og:url" content="https://g4f.dev/docs/providers/" />
     <meta property="og:site_name" content="GPT4Free Documentation" />
     <meta property="og:image" content="https://g4f.dev/dist/img/apple-touch-icon.png" />
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Documentation: API endpoints and usage | GPT4Free Documentation" />
-    <meta name="twitter:description" content="Free AI endpoints and comprehensive documentation for Documentation: API endpoints and usage." />
+    <meta name="twitter:title" content="G4F - Providers | GPT4Free Documentation" />
+    <meta name="twitter:description" content="Free AI endpoints and comprehensive documentation for G4F - Review." />
     <meta name="twitter:image" content="https://g4f.dev/dist/img/apple-touch-icon.png" />
 
     <!-- Canonical -->
-    <link rel="canonical" href="https://g4f.dev/docs/ready_to_use.html" />
+    <link rel="canonical" href="https://g4f.dev/docs/providers/" />
 
     <link rel="apple-touch-icon" sizes="180x180" href="/dist/img/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/dist/img/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/dist/img/favicon-16x16.png" />
     <link rel="manifest" href="/dist/img/site.webmanifest" />
-
-    <!-- GitHub Primer CSS & styles -->
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/light-74231a1f3bbb.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/dark-8a995f0bacd4.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/primer-primitives-225433424a87.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/primer-b8b91660c29d.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/global-205098e9fedd.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/code-177d21388df8.css" />
-
-    
+    <link rel="stylesheet" href="../../dist/css/dracula.min.css" />
     <style>
         :root {
             --accent: #8b3dff;
@@ -138,7 +129,6 @@
             border: 1px solid #3d2a5c;
             position: relative;
         }
-
 
         .markdown-body code {
             font-family: 'SF Mono', 'Cascadia Code', 'Roboto Mono', Consolas, Liberation Mono, Menlo, monospace;
@@ -368,14 +358,127 @@
         #google_translate_element {
             margin-bottom: 1rem;
         }
+
+        /* Main wrapper for content area */
+        .content-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        /* Provider tabs styling */
+        #providers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            background: var(--card-bg);
+            border-radius: 12px 12px 0 0;
+            border: 1px solid rgba(139, 61, 255, 0.2);
+            border-bottom: none;
+        }
+
+        #providers a {
+            display: inline-block;
+            padding: 0.6rem 1.2rem;
+            background: rgba(139, 61, 255, 0.1);
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        #providers a:hover {
+            background: rgba(139, 61, 255, 0.25);
+            color: var(--hover-color);
+            border-color: var(--accent);
+            transform: translateY(-2px);
+        }
+
+        #providers a.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 4px 15px rgba(139, 61, 255, 0.4);
+        }
+
+        /* Adjust main when used with tabs */
+        .content-wrapper main {
+            border-radius: 0 0 12px 12px;
+            margin-top: 0;
+        }
+
+        /* Welcome message styling */
+        .welcome-message {
+            text-align: center;
+            padding: 3rem 2rem;
+        }
+
+        .welcome-message h1 {
+            font-size: 2.2rem;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .welcome-message p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+
+        .provider-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .provider-grid a {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(139, 61, 255, 0.1);
+            border: 1px solid rgba(139, 61, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .provider-grid a:hover {
+            background: rgba(139, 61, 255, 0.25);
+            border-color: var(--accent);
+            color: var(--hover-color);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(139, 61, 255, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            #providers {
+                padding: 0.75rem 1rem;
+                gap: 0.4rem;
+            }
+
+            #providers a {
+                padding: 0.5rem 0.8rem;
+                font-size: 0.8rem;
+            }
+        }
     </style>
 
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "TechArticle",
-      "headline": "Documentation: API endpoints and usage",
-      "description": "GPT4Free documentation for Documentation: API endpoints and usage. Complete guides, examples, and API reference for free AI endpoints.",
+      "headline": "G4F - Review",
+      "description": "GPT4Free documentation for G4F - Review. Complete guides, examples, and API reference for free AI endpoints.",
       "author": {
         "@type": "Organization",
         "@id": "https://g4f.dev/#organization",
@@ -392,7 +495,7 @@
       },
       "mainEntityOfPage": {
         "@type": "WebPage",
-        "@id": "https://g4f.dev/docs/ready_to_use.html"
+        "@id": "https://g4f.dev/docs/providers/"
       },
       "datePublished": "2024-01-01T00:00:00Z",
       "dateModified": "2024-01-01T00:00:00Z",
@@ -402,6 +505,40 @@
       "articleSection": "Documentation"
     }
     </script>
+    <script src="../../dist/js/framework.js" defer></script>
+    <script src="../../dist/js/highlight.min.js" async></script>
+    <script src="../../dist/js/highlightjs-copy.min.js" async></script>
+    <script src="../../dist/js/sanitize-html.js" async></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js" defer></script>
+    <script>
+        function loadMarkdown(event) {
+            event.preventDefault();
+            const url = event.target.getAttribute('href');
+            
+            // Update active tab state
+            document.querySelectorAll('#providers a').forEach(a => {
+                a.classList.remove('active');
+                if (a.getAttribute('href') === url) {
+                    a.classList.add('active');
+                }
+            });
+            
+            fetch(url)
+                .then(response => response.text())
+                .then(markdown => {
+                    const html = renderMarkdown(markdown);
+                    document.querySelector('main').innerHTML = html;
+                    document.querySelectorAll('main code:not(.hljs)').forEach((el) => {
+                        if (el.className != "hljs") {
+                            hljs.highlightElement(el);
+                        }
+                    });
+                    generateTableOfContents();
+                    window.scrollTo(0, 0);
+                })
+                .catch(error => console.error('Error loading markdown:', error));
+        }
+    </script>
 </head>
 <body>
     <div class="container">
@@ -409,202 +546,38 @@
             <!-- Translation Button -->
             <button id="translate-toggle">🌐 Translate Page</button>
             <div id="google_translate_element" style="display:none;"></div>
-            <h2>Contents</h2>
-            <ul id="toc-list">
-                <!-- Table of contents will be generated here -->
-            </ul>
             <hr style="margin: 1.5rem 0; opacity: 0.3;">
             <ul>
                 <li><a href="/docs/" aria-label="Return to documentation home">📚 Documentation Hub</a></li>
                 <li><a href="/" aria-label="Return to main site">🏠 G4F Home</a></li>
             </ul>
         </nav>
-
-        <main role="main" class="markdown-body entry-content" itemprop="text" itemscope itemtype="https://schema.org/TechArticle">
-<h2>Documentation: API endpoints and usage</h2>
-<h3>Overview</h3>
-<ul>
-<li>This collection exposes multiple base URLs (providers) for chat-style completions. Each entry in the table lists a base URL (with /models removed) and whether an API key is required.</li>
-<li>Base URL extraction: remove /models from the URL in your table to get the API base_url you should use in requests.</li>
-</ul>
-<h3>Base URLs Table</h3>
-<markdown-accessiblity-table><table role="table">
-<thead>
-<tr>
-<th>Base URLs</th>
-<th>API key</th>
-<th>Notes</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><a href="https://localhost:1337/v1/models" rel="nofollow">https://localhost:1337/v1</a></td>
-<td>none required</td>
-<td>use it locally</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/api/groq/models" rel="nofollow">https://g4f.dev/api/groq</a></td>
-<td>none required</td>
-<td>Use Groq provider</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/api/ollama/models" rel="nofollow">https://g4f.dev/api/ollama</a></td>
-<td>none required</td>
-<td>Use Ollama provider</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/api/pollinations.ai/models" rel="nofollow">https://g4f.dev/api/pollinations.ai</a></td>
-<td>none required</td>
-<td>Proxy for pollinations.ai</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/api/nvidia/models" rel="nofollow">https://g4f.dev/api/nvidia</a></td>
-<td>none required</td>
-<td>Use Nvidia provider</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/ai/grok" rel="nofollow">https://g4f.dev/api/grok</a></td>
-<td>none required</td>
-<td>Hosted Grok provider</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/ai/gemini" rel="nofollow">https://g4f.dev/api/gemini</a></td>
-<td>none required</td>
-<td>Hosted Gemini provider</td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/api/gpt-oss-120b/models" rel="nofollow">https://g4f.dev/api/gpt-oss-120b</a></td>
-<td>required</td>
-<td>now requires API key from <a href="https://g4f.dev/api_key.html" rel="nofollow">g4f.dev/api_key</a></td>
-</tr>
-<tr>
-<td><a href="https://g4f.dev/v1/models" rel="nofollow">https://g4f.dev/v1</a></td>
-<td>required</td>
-<td>Hosted instance, many models, get key from <a href="https://g4f.dev/api_key.html" rel="nofollow">g4f.dev/api_key</a></td>
-</tr>
-</tbody>
-</table></markdown-accessiblity-table>
-<h3>Also Supported API Routes:</h3>
-<ul>
-<li><strong>Nvidia</strong>: <a href="https://integrate.api.nvidia.com/v1" rel="nofollow">https://integrate.api.nvidia.com/v1</a></li>
-<li><strong>DeepInfra</strong>: <a href="https://api.deepinfra.com/v1" rel="nofollow">https://api.deepinfra.com/v1</a></li>
-<li><strong>OpenRouter</strong>: <a href="https://openrouter.ai/api/v1" rel="nofollow">https://openrouter.ai/api/v1</a></li>
-<li><strong>Google Gemini</strong>: <a href="https://generativelanguage.googleapis.com/v1beta/openai" rel="nofollow">https://generativelanguage.googleapis.com/v1beta/openai</a></li>
-<li><strong>xAI</strong>: <a href="https://api.x.ai/v1" rel="nofollow">https://api.x.ai/v1</a></li>
-<li><strong>Together</strong>: <a href="https://api.together.xyz/v1" rel="nofollow">https://api.together.xyz/v1</a></li>
-<li><strong>OpenAI</strong>: <a href="https://api.openai.com/v1" rel="nofollow">https://api.openai.com/v1</a></li>
-<li><strong>Strinable Inf</strong>: <a href="https://stringableinf.com/api/v1" rel="nofollow">https://stringableinf.com/api/v1</a></li>
-<li><strong>TypeGPT</strong>: <a href="https://typegpt.ai/api" rel="nofollow">https://typegpt.ai/api</a></li>
-<li><strong>ApiAirforce</strong>: baseUrl: <a href="https://api.airforce/v1" rel="nofollow">https://api.airforce/v1</a>, apiEndpoint: <a href="https://stringableinf.com/api/v1/chat/completions" rel="nofollow">https://stringableinf.com/api/v1/chat/completions</a></li>
-<li><strong>Auto Provider &amp; Model Selection</strong>: apiEndpoint: <a href="https://g4f.dev/ai/%7Bnow%7D" rel="nofollow">https://g4f.dev/ai/{now}</a></li>
-</ul>
-<h3>Individual clients available for:</h3>
-<ul>
-<li>Pollinations AI</li>
-<li>Puter AI</li>
-<li>HuggingFace</li>
-<li>Ollama</li>
-</ul>
-<h3>How to choose a base URL</h3>
-<ul>
-<li>If you want a local or self-hosted instance, you can use:
-<ul>
-<li><a href="https://localhost:1337/v1" rel="nofollow">https://localhost:1337/v1</a></li>
-</ul>
-</li>
-<li>If you want a free or public provider, you can use one of the g4f.dev endpoints (e.g., groq, ollama, pollinations.ai, nvidia, grok).</li>
-<li>If you want Azure-backed usage or hosted instances, use:
-<ul>
-<li><a href="https://g4f.dev/v1" rel="nofollow">https://g4f.dev/v1</a> (requires API key)</li>
-</ul>
-</li>
-</ul>
-<h3>API usage basics</h3>
-<ul>
-<li><strong>Endpoints</strong>: All chat-style interactions use the chat completions endpoint at <code class="notranslate">{base_url}/chat/completions</code></li>
-<li><strong>Authentication</strong>:
-<ul>
-<li>If the table entry says "none required", you do not need to pass an API key.</li>
-<li>If an API key is required (Azure, hosted instances, or gpt-oss-120b), supply api_key in your client configuration or request headers.</li>
-</ul>
-</li>
-<li><strong>Payload shape</strong> (typical):
-<ul>
-<li>model: string (e.g., gpt-oss-120b, gpt-4o, etc.)</li>
-<li>temperature: number (optional)</li>
-<li>messages: array of { role: "system" | "user" | "assistant", content: string }</li>
-</ul>
-</li>
-</ul>
-<h3>Example payload</h3>
-<div class="highlight highlight-source-json"><pre class="notranslate">{
-  <span class="pl-ent">"model"</span>: <span class="pl-s"><span class="pl-pds">"</span>gpt-4o<span class="pl-pds">"</span></span>,
-  <span class="pl-ent">"temperature"</span>: <span class="pl-c1">0.9</span>,
-  <span class="pl-ent">"messages"</span>: [{<span class="pl-ent">"role"</span>: <span class="pl-s"><span class="pl-pds">"</span>user<span class="pl-pds">"</span></span>, <span class="pl-ent">"content"</span>: <span class="pl-s"><span class="pl-pds">"</span>Hello, how are you?<span class="pl-pds">"</span></span>}]
-}</pre></div>
-<h3>Examples</h3>
-<h4>1) Python requests (local example)</h4>
-<ul>
-<li>Sends a chat completion to the local endpoint at /v1/chat/completions</li>
-</ul>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">import</span> <span class="pl-s1">requests</span>
-
-<span class="pl-s1">payload</span> <span class="pl-c1">=</span> {
-    <span class="pl-s">"model"</span>: <span class="pl-s">"gpt-4o"</span>,
-    <span class="pl-s">"temperature"</span>: <span class="pl-c1">0.9</span>,
-    <span class="pl-s">"messages"</span>: [{<span class="pl-s">"role"</span>: <span class="pl-s">"user"</span>, <span class="pl-s">"content"</span>: <span class="pl-s">"Hello, how are you?"</span>}]
-}
-
-<span class="pl-s1">response</span> <span class="pl-c1">=</span> <span class="pl-s1">requests</span>.<span class="pl-c1">post</span>(<span class="pl-s">"http://localhost:1337/v1/chat/completions"</span>, <span class="pl-s1">json</span><span class="pl-c1">=</span><span class="pl-s1">payload</span>)
-
-<span class="pl-k">if</span> <span class="pl-s1">response</span>.<span class="pl-c1">status_code</span> <span class="pl-c1">==</span> <span class="pl-c1">200</span>:
-    <span class="pl-en">print</span>(<span class="pl-s1">response</span>.<span class="pl-c1">text</span>)
-<span class="pl-k">else</span>:
-    <span class="pl-en">print</span>(<span class="pl-s">f"Request failed with status code <span class="pl-s1"><span class="pl-kos">{</span><span class="pl-s1">response</span>.<span class="pl-c1">status_code</span><span class="pl-kos">}</span></span>"</span>)
-    <span class="pl-en">print</span>(<span class="pl-s">"Response:"</span>, <span class="pl-s1">response</span>.<span class="pl-c1">text</span>)</pre></div>
-<h4>2) Python with OpenAI client (custom base_url)</h4>
-<ul>
-<li>Use the OpenAI Python client but point it at your chosen base URL</li>
-</ul>
-<div class="highlight highlight-source-python"><pre class="notranslate"><span class="pl-k">from</span> <span class="pl-s1">openai</span> <span class="pl-k">import</span> <span class="pl-v">OpenAI</span>
-
-<span class="pl-s1">client</span> <span class="pl-c1">=</span> <span class="pl-en">OpenAI</span>(
-    <span class="pl-s1">api_key</span><span class="pl-c1">=</span><span class="pl-s">"secret"</span>,  <span class="pl-c">#  A API key is required; set 'secrect' for "none required api_key" providers</span>
-    <span class="pl-s1">base_url</span><span class="pl-c1">=</span><span class="pl-s">"https://g4f.dev/api/gpt-oss-120b"</span>  <span class="pl-c"># replace with the chosen base_url</span>
-)
-
-<span class="pl-s1">response</span> <span class="pl-c1">=</span> <span class="pl-s1">client</span>.<span class="pl-c1">chat</span>.<span class="pl-c1">completions</span>.<span class="pl-c1">create</span>(
-    <span class="pl-s1">model</span><span class="pl-c1">=</span><span class="pl-s">"gpt-oss-120b"</span>,
-    <span class="pl-s1">messages</span><span class="pl-c1">=</span>[{<span class="pl-s">"role"</span>: <span class="pl-s">"user"</span>, <span class="pl-s">"content"</span>: <span class="pl-s">"Explain quantum computing"</span>}],
-)
-
-<span class="pl-en">print</span>(<span class="pl-s1">response</span>.<span class="pl-c1">choices</span>[<span class="pl-c1">0</span>].<span class="pl-c1">message</span>.<span class="pl-c1">content</span>)</pre></div>
-<h4>3) JavaScript (HTML/JS client)</h4>
-<ul>
-<li>Basic usage in a browser-like environment</li>
-</ul>
-<div class="highlight highlight-text-html-basic"><pre class="notranslate"><span class="pl-kos">&lt;</span><span class="pl-ent">script</span> <span class="pl-c1">type</span>="<span class="pl-s">module</span>"<span class="pl-kos">&gt;</span>
-    <span class="pl-k">import</span> <span class="pl-v">Client</span> <span class="pl-k">from</span> <span class="pl-s">'https://g4f.dev/dist/js/client.js'</span><span class="pl-kos">;</span>
-
-    <span class="pl-c">// Initialize a client with a base URL and optional API key</span>
-    <span class="pl-k">const</span> <span class="pl-s1">client</span> <span class="pl-c1">=</span> <span class="pl-k">new</span> <span class="pl-v">Client</span><span class="pl-kos">(</span><span class="pl-kos">{</span> <span class="pl-c1">baseUrl</span>: <span class="pl-s">'https://g4f.dev/api/grok'</span><span class="pl-kos">,</span> <span class="pl-c1">apiKey</span>: <span class="pl-s">'secret'</span> <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
-
-    <span class="pl-k">const</span> <span class="pl-s1">result</span> <span class="pl-c1">=</span> <span class="pl-k">await</span> <span class="pl-s1">client</span><span class="pl-kos">.</span><span class="pl-c1">chat</span><span class="pl-kos">.</span><span class="pl-c1">completions</span><span class="pl-kos">.</span><span class="pl-en">create</span><span class="pl-kos">(</span><span class="pl-kos">{</span>
-        <span class="pl-c1">model</span>: <span class="pl-s">'grok-4-fast-non-reasoning'</span><span class="pl-kos">,</span>
-        <span class="pl-c1">messages</span>: <span class="pl-kos">[</span>
-            <span class="pl-kos">{</span> <span class="pl-c1">role</span>: <span class="pl-s">'system'</span><span class="pl-kos">,</span> <span class="pl-c1">content</span>: <span class="pl-s">'You are a helpful assistant.'</span> <span class="pl-kos">}</span><span class="pl-kos">,</span>
-            <span class="pl-kos">{</span> <span class="pl-c1">role</span>: <span class="pl-s">'user'</span><span class="pl-kos">,</span> <span class="pl-c1">content</span>: <span class="pl-s">'Tell me a joke.'</span> <span class="pl-kos">}</span>
-        <span class="pl-kos">]</span>
-    <span class="pl-kos">}</span><span class="pl-kos">)</span><span class="pl-kos">;</span>
-<span class="pl-kos">&lt;/</span><span class="pl-ent">script</span><span class="pl-kos">&gt;</span></pre></div>
-<h3>Notes and quick tips</h3>
-<ul>
-<li><strong>API Key Changes</strong>: The gpt-oss-120b endpoint now requires an API key. Retrieve it from <a href="https://g4f.dev/api_key.html" rel="nofollow">g4f.dev/api_key.html</a>.</li>
-<li><strong>Hosted Instance URL</strong>: Updated from host.g4f.dev/v1 to g4f.dev/v1</li>
-<li>The examples assume a chat-style completions API where you pass messages and receive a response containing the assistant's content.</li>
-<li>The base_url is always the URL without the trailing /models segment</li>
-</ul>
-</main>
+        <div class="content-wrapper">
+            <nav id="providers" aria-label="Providers navigation" role="navigation">
+                <a href="https://g4f.dev/docs/providers/gemini.md" onclick="loadMarkdown(event)">Gemini</a>
+                <a href="https://g4f.dev/docs/providers/huggingface.md" onclick="loadMarkdown(event)">HuggingFace</a>
+                <a href="https://g4f.dev/docs/providers/ollama.md" onclick="loadMarkdown(event)">Ollama</a>
+                <a href="https://g4f.dev/docs/providers/openai.md" onclick="loadMarkdown(event)">OpenAI</a>
+                <a href="https://g4f.dev/docs/providers/perplexity.md" onclick="loadMarkdown(event)">Perplexity</a>
+                <a href="https://g4f.dev/docs/providers/pollinations.md" onclick="loadMarkdown(event)">Pollinations</a>
+                <a href="https://g4f.dev/docs/providers/puter.md" onclick="loadMarkdown(event)">Puter</a>
+            </nav>
+            <main role="main" class="entry-content markdown-body" itemprop="text" itemscope itemtype="https://schema.org/TechArticle">
+                <div class="welcome-message">
+                    <h1>🤖 AI Providers</h1>
+                    <p>Select a provider above to view its documentation and usage examples.</p>
+                    <div class="provider-grid">
+                        <a href="https://g4f.dev/docs/providers/gemini.md" onclick="loadMarkdown(event)">Gemini</a>
+                        <a href="https://g4f.dev/docs/providers/huggingface.md" onclick="loadMarkdown(event)">HuggingFace</a>
+                        <a href="https://g4f.dev/docs/providers/ollama.md" onclick="loadMarkdown(event)">Ollama</a>
+                        <a href="https://g4f.dev/docs/providers/openai.md" onclick="loadMarkdown(event)">OpenAI</a>
+                        <a href="https://g4f.dev/docs/providers/perplexity.md" onclick="loadMarkdown(event)">Perplexity</a>
+                        <a href="https://g4f.dev/docs/providers/pollinations.md" onclick="loadMarkdown(event)">Pollinations</a>
+                        <a href="https://g4f.dev/docs/providers/puter.md" onclick="loadMarkdown(event)">Puter</a>
+                    </div>
+                </div>
+            </main>
+        </div>
     </div>
 
     
