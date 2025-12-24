@@ -3121,7 +3121,8 @@ function get_modelTags(model, add_vision = true) {
     return parts.join("");
 }
 
-async function load_providers(providers, provider_options, providersListContainer) {
+async function load_providers(providers, provider_options, providersListContainer, providersToggleContainer) {
+    providersToggleContainer = providersToggleContainer || settingsContent;
     providers.sort((a, b) => a.label.localeCompare(b.label));
     providers.forEach((provider) => {
         if (provider.hf_space) {
@@ -3166,7 +3167,7 @@ async function load_providers(providers, provider_options, providersListContaine
             </div>
             <div class="collapsible-content hidden"></div>
         `;
-        settingsContent.appendChild(providersContainer);
+        providersToggleContainer.appendChild(providersContainer);
 
         providers.forEach((provider) => {
             if (!provider.parent || provider.name == "PuterJS") {
@@ -3260,6 +3261,10 @@ async function on_api() {
         stopRecognition();
     });
 
+    // Get the Providers tab containers (or fall back to settingsContent for backward compatibility)
+    const providersApiKeysContainer = document.getElementById("providers-api-keys-container") || settingsContent;
+    const providersToggleContainer = document.getElementById("providers-toggle-container") || settingsContent;
+
     let providersListContainer = document.createElement("div");
     providersListContainer.classList.add("field", "collapsible");
     providersListContainer.innerHTML = `
@@ -3269,7 +3274,7 @@ async function on_api() {
         </div>
         <div class="collapsible-content api-key hidden"></div>
     `;
-    settingsContent.appendChild(providersListContainer);
+    providersApiKeysContainer.appendChild(providersListContainer);
 
     providersListContainer.querySelector(".collapsible-header").addEventListener('click', (e) => {
         providersListContainer.querySelector(".collapsible-content").classList.toggle('hidden');
@@ -3315,7 +3320,7 @@ async function on_api() {
 
         let provider_options = [];
         api("providers").then(async (providers) => {
-            await load_providers(providers, provider_options, providersListContainer);
+            await load_providers(providers, provider_options, providersListContainer, providersToggleContainer);
             load_provider_models(appStorage.getItem("provider"));
         }).catch(async (e)=>{
             console.log(e)
@@ -3910,21 +3915,43 @@ async function api(ressource, args=null, files=null, message_id=null, finish_mes
 
 async function read_response(response, message_id, provider, finish_message) {
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = ""
+    let buffer = "";
+    let currentEvent = null;
+    let currentData = null;
+    
     while (true) {
         const { value, done } = await reader.read();
         if (done) {
             break;
         }
-        for (const line of value.split("\n")) {
-            if (!line) {
-                continue;
-            }
-            try {
-                await add_message_chunk(JSON.parse(buffer + line), message_id, provider, finish_message);
-                buffer = "";
-            } catch {
-                buffer += line
+        buffer += value;
+        const lines = buffer.split("\n");
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop();
+        
+        for (const line of lines) {
+            if (line.startsWith("event: ")) {
+                currentEvent = line.substring(7).trim();
+            } else if (line.startsWith("data: ")) {
+                currentData = line.substring(6);
+            } else if (line === "" && currentData !== null) {
+                // Empty line marks end of SSE event
+                try {
+                    const data = JSON.parse(currentData);
+                    await add_message_chunk(data, message_id, provider, finish_message);
+                } catch (e) {
+                    console.error("Failed to parse SSE data:", e, currentData);
+                }
+                currentEvent = null;
+                currentData = null;
+            } else if (line && !line.startsWith("event:") && !line.startsWith("data:")) {
+                // Fallback for legacy JSON-only format (no SSE prefix)
+                try {
+                    const data = JSON.parse(line);
+                    await add_message_chunk(data, message_id, provider, finish_message);
+                } catch {
+                    // Ignore parse errors for incomplete lines
+                }
             }
         }
     }
