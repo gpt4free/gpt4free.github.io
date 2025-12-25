@@ -137,15 +137,16 @@ models.forEach(m => console.log(m.id, m.type));
 You can also iterate through every available provider and fetch their supported models in one go:
 
 ```js
-import providers from '@gpt4free/g4f.dev/providers';
-import { createClient } from '@gpt4free/g4f.dev/providers';
+import { loadProviders, createClient } from '@gpt4free/g4f.dev/providers';
+
+const providers = await loadProviders();
 
 // Example usage: Fetch and log models for each provider
 const providerModels = {};
 for (const key of Object.keys(providers)) {
     console.log('Provider:', key, providers[key]);
     try {
-        const client = createClient(key);
+        const client = await createClient(key);
         providerModels[key] = await client.models.list();
         console.log(`Models for provider "${key}":`, providerModels[key].map(m => m.id));
     } catch (error) {
