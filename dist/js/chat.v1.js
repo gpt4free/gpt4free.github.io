@@ -42,7 +42,7 @@ const translationSnipptes = [
     "{0} Conversations/Settings were imported successfully",
     "No content found", "Files are loaded successfully",
     "Importing conversations...", "New version:", "Providers API key", "Providers (Enable/Disable)",
-    "Get API key", "Uploading files...", "Invalid link", "Loading...", "Live Providers",
+    "Get API key", "Uploading files...", "Invalid link", "Loading...", "Live Providers", "Custom Providers",
     "Search Off", "Search On", "Recognition On", "Recognition Off", "Delete Conversation",
     "Favorite Models:", "Stop Recording", "Record Audio", "Upload Audio", "No Title", "1 Copy",
 ];
@@ -1347,6 +1347,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         message_index: message_index,
     }
     async function finish_message() {
+        let final_message  = null;
         content_map.update_timeouts.forEach((timeoutId)=>clearTimeout(timeoutId));
         content_map.update_timeouts = [];
         if (!error_storage[message_id] && message_storage[message_id]) {
@@ -1388,7 +1389,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                 regenerate = conversation.items[conversation.items.length-1]["role"] != "user";
             }
             // Create final message content
-            const final_message = message_storage[message_id]
+            final_message = message_storage[message_id]
                                 + (error_storage[message_id] ? " [error]" : "")
                                 + (stop_generating.classList.contains('stop_generating-hidden') ? " [aborted]" : "")
             if (reasoning_storage[message_id] && !reasoning_storage[message_id].status) {
@@ -1599,7 +1600,8 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                     messages,
                     stream: true,
                     signal: controller_storage[message_id].signal,
-                    ...(mcpTools && mcpTools.length > 0 ? { tools: mcpTools } : {})
+                    ...(mcpTools && mcpTools.length > 0 ? { tools: mcpTools } : {}),
+                    ...(conversation.data ? { conversation: conversation.data[provider] } : {})
                 });
 
                 let hasModel = false;
@@ -1634,6 +1636,15 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                                 }
                             }
                         }
+
+                        if (chunk.conversation) {
+                            const conversation = await get_conversation(window.conversation_id);
+                            if (!conversation.data) {
+                                conversation.data = {};
+                            }
+                            conversation.data[provider] = chunk.conversation;
+                            await save_conversation(update_conversation(conversation));
+                        }
                         
                         if (choice?.delta?.reasoning) {
                             await add_message_chunk({type: "reasoning", token: choice?.delta?.reasoning}, message_id);
@@ -1667,6 +1678,11 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         let apiBase;
         if (provider == "Custom") {
             apiBase = appStorage.getItem("Custom-api_base");
+        } else if (provider && provider.startsWith("custom:")) {
+            // Handle custom providers from API (custom:server_id format)
+            const serverId = provider.substring(7); // Remove "custom:" prefix
+            apiBase = `https://g4f.dev/custom/${serverId}`;
+            provider = "Custom"; // Use Custom provider type for API request
         }
         const ignored = Array.from(settings.querySelectorAll("input.provider:not(:checked)")).map((el)=>el.value);
         const extraBody = {};
@@ -2592,7 +2608,104 @@ const register_settings_storage = async () => {
                 element.value = ""
             });
         }
+        // Handle Custom-api_base changes to update custom provider dropdown
+        if (element.id === "Custom-api_base") {
+            element.addEventListener('input', async (event) => {
+                updateCustomProviderOption(element.value);
+            });
+            element.addEventListener('change', async (event) => {
+                updateCustomProviderOption(element.value);
+            });
+        }
     });
+}
+
+function updateCustomProviderOption(apiBaseValue) {
+    const customOptgroup = document.getElementById("custom-providers-optgroup");
+    if (!customOptgroup) return;
+    
+    const existingOption = customOptgroup.querySelector('option[value="Custom"]');
+    
+    if (apiBaseValue && apiBaseValue.trim()) {
+        if (!existingOption) {
+            const customOption = document.createElement("option");
+            customOption.value = "Custom";
+            customOption.dataset.live = "true";
+            customOption.dataset.custom = "true";
+            customOption.text = "Custom Provider 🔧";
+            customOptgroup.appendChild(customOption);
+        }
+    } else {
+        if (existingOption) {
+            existingOption.remove();
+        }
+    }
+}
+
+async function loadCustomProvidersFromAPI(customOptgroup, providersContainer = null) {
+    if (!customOptgroup) {
+        customOptgroup = document.getElementById("custom-providers-optgroup");
+    }
+    if (!customOptgroup) return;
+    
+    try {
+        const response = await fetch("https://g4f.dev/custom/api/servers/public");
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const servers = data.servers || [];
+        
+        // Store servers globally for client creation
+        window.customServers = servers;
+        
+        servers.forEach(server => {
+            // Check if this server already exists in dropdown
+            const existingOption = customOptgroup.querySelector(`option[data-server-id="${server.id}"]`);
+            if (!existingOption) {
+                const option = document.createElement("option");
+                option.value = `custom:${server.id}`;
+                option.dataset.live = "true";
+                option.dataset.custom = "true";
+                option.dataset.serverId = server.id;
+                option.dataset.baseUrl = server.base_url;
+                option.dataset.label = server.label;
+                
+                // Build label with model count if available
+                let label = server.label || server.id;
+                if (server.allowed_models && server.allowed_models.length > 0) {
+                    label += ` (${server.allowed_models.length} models)`;
+                }
+                option.text = `${label} 🌐`;
+                
+                customOptgroup.appendChild(option);
+            }
+            
+            // Add to providers toggle list if container provided
+            if (providersContainer) {
+                const toggleContent = providersContainer.querySelector(".collapsible-content");
+                if (toggleContent && !toggleContent.querySelector(`#ProviderCustom${server.id}`)) {
+                    const providerItem = document.createElement("div");
+                    providerItem.classList.add("provider-item", "custom-server-item");
+                    const isEnabled = appStorage.getItem(`enableCustomServer_${server.id}`) !== "false";
+                    providerItem.innerHTML = `
+                        <span class="label">${server.label || server.id} 🌐</span>
+                        <input id="ProviderCustom${server.id}" type="checkbox" name="ProviderCustom${server.id}" value="custom:${server.id}" class="provider custom-server" data-server-id="${server.id}" ${isEnabled ? 'checked="checked"' : ''}/>
+                        <label for="ProviderCustom${server.id}" class="toogle" title="Enable or disable this custom server"></label>
+                    `;
+                    providerItem.querySelector("input").addEventListener("change", (event) => {
+                        appStorage.setItem(`enableCustomServer_${server.id}`, event.target.checked ? "true" : "false");
+                        const option = customOptgroup.querySelector(`option[data-server-id="${server.id}"]`);
+                        if (option) {
+                            option.disabled = !event.target.checked;
+                        }
+                    });
+                    toggleContent.appendChild(providerItem);
+                }
+            }
+        });
+    } catch (e) {
+        console.debug("Failed to load custom providers from API:", e);
+    }
 }
 
 async function load_settings(provider_options) {
@@ -3190,6 +3303,42 @@ async function load_providers(providers, provider_options, providersListContaine
             providersContainer.querySelector(".collapsible-content").classList.toggle('hidden');
             providersContainer.querySelector(".collapsible-header").classList.toggle('active');
         });
+
+        // Add Live Providers toggle
+        let liveProvidersToggle = document.createElement("div");
+        liveProvidersToggle.classList.add("provider-item");
+        const liveEnabled = appStorage.getItem("enableLiveProviders") !== "false";
+        liveProvidersToggle.innerHTML = `
+            <span class="label">Enable Live Providers</span>
+            <input id="enableLiveProviders" type="checkbox" name="enableLiveProviders" value="live" class="provider-toggle" ${liveEnabled ? 'checked="checked"' : ''}/>
+            <label for="enableLiveProviders" class="toogle" title="Enable or disable all live providers in dropdown"></label>
+        `;
+        liveProvidersToggle.querySelector("input").addEventListener("change", (event) => {
+            appStorage.setItem("enableLiveProviders", event.target.checked ? "true" : "false");
+            const optgroup = document.getElementById("live-providers-optgroup");
+            if (optgroup) {
+                optgroup.disabled = !event.target.checked;
+            }
+        });
+        providersContainer.querySelector(".collapsible-content").insertBefore(liveProvidersToggle, providersContainer.querySelector(".collapsible-content").firstChild);
+
+        // Add Custom Providers toggle
+        let customProvidersToggle = document.createElement("div");
+        customProvidersToggle.classList.add("provider-item");
+        const customEnabled = appStorage.getItem("enableCustomProviders") !== "false";
+        customProvidersToggle.innerHTML = `
+            <span class="label">Enable Custom Providers</span>
+            <input id="enableCustomProviders" type="checkbox" name="enableCustomProviders" value="custom" class="provider-toggle" ${customEnabled ? 'checked="checked"' : ''}/>
+            <label for="enableCustomProviders" class="toogle" title="Enable or disable custom providers in dropdown"></label>
+        `;
+        customProvidersToggle.querySelector("input").addEventListener("change", (event) => {
+            appStorage.setItem("enableCustomProviders", event.target.checked ? "true" : "false");
+            const optgroup = document.getElementById("custom-providers-optgroup");
+            if (optgroup) {
+                optgroup.disabled = !event.target.checked;
+            }
+        });
+        providersContainer.querySelector(".collapsible-content").insertBefore(customProvidersToggle, providersContainer.querySelector(".collapsible-content").firstChild.nextSibling);
     }
     load_provider_login_urls(providersListContainer);
     await load_settings(provider_options);
@@ -3281,11 +3430,17 @@ async function on_api() {
         providersListContainer.querySelector(".collapsible-header").classList.toggle('active');
     });
     if (providerSelect) {
+        // Add Live Providers optgroup
         const optgroup = document.createElement("optgroup");
+        optgroup.id = "live-providers-optgroup";
         optgroup.label = framework.translate('Live Providers');
+        const liveProvidersEnabled = appStorage.getItem("enableLiveProviders") !== "false";
+        if (!liveProvidersEnabled) {
+            optgroup.disabled = true;
+        }
         Object.entries(window.providers || {}).forEach(([name, config]) => {
-            if (name === "custom" && !localStorage.getItem("Custom-api_base")) {
-                return;
+            if (name === "custom") {
+                return; // Skip custom here, will be added separately
             }
             if (["together", "huggingface", "typegpt"].includes(name) && !localStorage.getItem(window.providerLocalStorage[name])) {
                 return;
@@ -3317,6 +3472,28 @@ async function on_api() {
             });
         });
         providerSelect.appendChild(optgroup);
+
+        // Add Custom Providers optgroup
+        const customOptgroup = document.createElement("optgroup");
+        customOptgroup.id = "custom-providers-optgroup";
+        customOptgroup.label = framework.translate('Custom Providers');
+        const customProvidersEnabled = appStorage.getItem("enableCustomProviders") !== "false";
+        if (!customProvidersEnabled) {
+            customOptgroup.disabled = true;
+        }
+        // Add Custom provider if configured (local custom provider)
+        if (localStorage.getItem("Custom-api_base")) {
+            const customOption = document.createElement("option");
+            customOption.value = "custom";
+            customOption.dataset.live = "true";
+            customOption.dataset.custom = "true";
+            customOption.text = "Custom Provider 🔧";
+            customOptgroup.appendChild(customOption);
+        }
+        providerSelect.appendChild(customOptgroup);
+
+        // Load custom providers from API and add to toggle list
+        await loadCustomProvidersFromAPI(document.getElementById("custom-providers-optgroup"));
 
         let provider_options = [];
         api("providers").then(async (providers) => {
@@ -3825,6 +4002,29 @@ async function api(ressource, args=null, files=null, message_id=null, finish_mes
             providerModelSignal.abort();
         }
         providerModelSignal = new AbortController();
+        
+        // Handle custom providers from API (custom:server_id format)
+        if (args.startsWith("custom:")) {
+            const serverId = args.substring(7);
+            try {
+                const modelsResponse = await fetch(`https://g4f.dev/custom/api/servers/${serverId}/models`, {
+                    signal: providerModelSignal.signal,
+                });
+                if (modelsResponse.ok) {
+                    const data = await modelsResponse.json();
+                    // Convert to expected format
+                    const models = (data.data || []).map(m => ({
+                        model: m.id,
+                        label: m.id,
+                    }));
+                    return models;
+                }
+            } catch (e) {
+                console.debug("Failed to load custom provider models:", e);
+            }
+            return [];
+        }
+        
         api_key = get_api_key_by_provider(args);
         if (api_key) {
             headers['x-api-key'] = api_key;
@@ -3965,6 +4165,10 @@ function get_api_key_by_provider(provider) {
         }
         if (["custom"].includes(provider)) {
             return appStorage.getItem("Custom-api_key");
+        }
+        // Custom providers from API don't need API key (handled by the server)
+        if (provider.startsWith("custom:")) {
+            return null;
         }
         if (provider == "AnyProvider") {
             return {
@@ -5019,7 +5223,14 @@ async function initClient() {
         options.logCallback = logCallback;
     }
     try {
-        client = window.createClient(provider, options);
+        // Handle custom providers with custom:server_id format
+        if (provider.startsWith("custom:")) {
+            const serverId = provider.substring(7);
+            options.baseUrl = `https://g4f.dev/custom/${serverId}`;
+            client = window.createClient("custom", options);
+        } else {
+            client = window.createClient(provider, options);
+        }
     } catch (error) {
         console.error('Failed to create client:', error);
         return;
@@ -5390,7 +5601,236 @@ async function handleToolCalls(toolCalls, messages, model, provider, message_id,
     }
 }
 
+// Cloud Sync Functions
+const CLOUD_SYNC_API = "https://g4f.dev/members/api";
+
+async function checkCloudSyncSession() {
+    const token = appStorage.getItem("cloudSyncToken");
+    if (!token) {
+        showCloudSyncLogin();
+        return;
+    }
+    try {
+        const response = await fetch(`${CLOUD_SYNC_API}/user`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.user) {
+                showCloudSyncLoggedIn(data.user);
+                return;
+            } else {
+                appStorage.removeItem("cloudSyncToken");
+                showCloudSyncLogin();
+                return;
+            }
+        } else {
+            appStorage.removeItem("cloudSyncToken");
+            showCloudSyncLogin();
+            return;
+        }
+    } catch (e) {
+        console.error("Cloud sync session check failed:", e);
+        // Keep the token but show login section on error (network issue)
+        showCloudSyncLogin();
+    }
+}
+
+function showCloudSyncLogin() {
+    const loginSection = document.getElementById("cloudSyncLogin");
+    const syncSection = document.getElementById("cloudSyncSection");
+    if (loginSection) loginSection.style.display = "block";
+    if (syncSection) syncSection.style.display = "none";
+}
+
+function showCloudSyncLoggedIn(user) {
+    const loginSection = document.getElementById("cloudSyncLogin");
+    const syncSection = document.getElementById("cloudSyncSection");
+    const userEl = document.getElementById("cloudSyncUser");
+    if (loginSection) loginSection.style.display = "none";
+    if (syncSection) syncSection.style.display = "block";
+    if (userEl) userEl.textContent = user.name || user.email || "User";
+}
+
+function cloudSyncLoginRedirect(provider = "github") {
+    const returnUrl = encodeURIComponent(window.location.href);
+    const loginUrl = `https://g4f.dev/members/oauth/${provider}?redirect_chat=${returnUrl}`;
+    window.location.href = loginUrl;
+}
+
+function handleCloudSyncCallback() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get("session_token");
+    const userParam = urlParams.get("user");
+    if (token) {
+        appStorage.setItem("cloudSyncToken", token);
+        
+        // Parse and use user info if provided
+        if (userParam) {
+            try {
+                const user = JSON.parse(decodeURIComponent(userParam));
+                showCloudSyncLoggedIn(user);
+            } catch (e) {
+                console.error("Failed to parse user data:", e);
+            }
+        }
+        
+        // Clean up URL
+        const url = new URL(window.location.href);
+        url.searchParams.delete("session_token");
+        url.searchParams.delete("user");
+        window.history.replaceState({}, document.title, url.pathname + url.search);
+        
+        // Open settings to cloud sync tab
+        if (typeof open_settings === "function") {
+            setTimeout(() => {
+                open_settings();
+                // Switch to cloud sync tab
+                const cloudSyncTab = document.querySelector('.settings-tab[data-tab="cloudsync"]');
+                if (cloudSyncTab) cloudSyncTab.click();
+            }, 100);
+        }
+        
+        checkCloudSyncSession();
+    }
+}
+
+async function cloudSyncLogout() {
+    const token = appStorage.getItem("cloudSyncToken");
+    if (token) {
+        try {
+            await fetch(`${CLOUD_SYNC_API}/logout`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+        } catch (e) {
+            console.error("Logout failed:", e);
+        }
+    }
+    appStorage.removeItem("cloudSyncToken");
+    showCloudSyncLogin();
+}
+
+// Helper function to show/hide cloud sync loading indicator
+function showCloudSyncLoading(message) {
+    let loadingEl = document.getElementById("cloudSyncLoading");
+    if (!loadingEl) {
+        loadingEl = document.createElement("div");
+        loadingEl.id = "cloudSyncLoading";
+        loadingEl.className = "file-upload-loading";
+        document.body.appendChild(loadingEl);
+    }
+    loadingEl.innerHTML = `
+        <div class="upload-spinner"></div>
+        <p>${framework.translate(message)}</p>
+    `;
+    loadingEl.style.display = "flex";
+}
+
+function hideCloudSyncLoading() {
+    const loadingEl = document.getElementById("cloudSyncLoading");
+    if (loadingEl) {
+        loadingEl.style.display = "none";
+    }
+}
+
+async function syncConversationsToCloud() {
+    const token = appStorage.getItem("cloudSyncToken");
+    if (!token) {
+        cloudSyncLoginRedirect();
+        return;
+    }
+    showCloudSyncLoading("Uploading conversations...");
+    try {
+        const conversations = await list_conversations();
+        if (!conversations || conversations.length === 0) {
+            hideCloudSyncLoading();
+            alert("No conversations to sync.");
+            return;
+        }
+        const response = await fetch(`${CLOUD_SYNC_API}/conversations/sync`, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ conversations })
+        });
+        hideCloudSyncLoading();
+        if (response.ok) {
+            const data = await response.json();
+            console.log("Conversations synced to cloud:", data);
+            alert(`${conversations.length} conversations uploaded to cloud successfully!`);
+        } else {
+            const error = await response.json();
+            throw new Error(error.error || "Sync failed");
+        }
+    } catch (e) {
+        hideCloudSyncLoading();
+        console.error("Cloud sync upload failed:", e);
+        alert("Failed to upload conversations to cloud: " + e.message);
+    }
+}
+
+async function syncConversationsFromCloud() {
+    const token = appStorage.getItem("cloudSyncToken");
+    if (!token) {
+        cloudSyncLoginRedirect();
+        return;
+    }
+    showCloudSyncLoading("Downloading conversations...");
+    try {
+        const response = await fetch(`${CLOUD_SYNC_API}/conversations`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.conversations && data.conversations.length > 0) {
+                for (const conv of data.conversations) {
+                    // Remove cloud-specific fields before saving locally
+                    delete conv.synced_at;
+                    delete conv.user_id;
+                    await save_conversation(conv);
+                }
+                await load_conversations();
+                hideCloudSyncLoading();
+                console.log("Conversations synced from cloud");
+                alert(`Downloaded ${data.conversations.length} conversations from cloud!`);
+            } else {
+                hideCloudSyncLoading();
+                alert("No conversations found in cloud.");
+            }
+        } else {
+            const error = await response.json();
+            throw new Error(error.error || "Sync failed");
+        }
+    } catch (e) {
+        hideCloudSyncLoading();
+        console.error("Cloud sync download failed:", e);
+        alert("Failed to download conversations from cloud: " + e.message);
+    }
+}
+
+// Initialize cloud sync on page load
+handleCloudSyncCallback();
+checkCloudSyncSession();
+
+// Cloud Sync button event listeners
+const cloudSyncLoginBtn = document.getElementById("cloudSyncLoginBtn");
+const cloudSyncUploadBtn = document.getElementById("cloudSyncUpload");
+const cloudSyncDownloadBtn = document.getElementById("cloudSyncDownload");
+const cloudSyncLogoutBtn = document.getElementById("cloudSyncLogoutBtn");
+
+if (cloudSyncLoginBtn) cloudSyncLoginBtn.addEventListener("click", () => cloudSyncLoginRedirect("github"));
+if (cloudSyncUploadBtn) cloudSyncUploadBtn.addEventListener("click", syncConversationsToCloud);
+if (cloudSyncDownloadBtn) cloudSyncDownloadBtn.addEventListener("click", syncConversationsFromCloud);
+if (cloudSyncLogoutBtn) cloudSyncLogoutBtn.addEventListener("click", cloudSyncLogout);
+
 // Expose functions to global scope
 window.toggleMCPServer = toggleMCPServer;
 window.removeMCPServer = removeMCPServer;
 window.toggleMCPTool = toggleMCPTool;
+window.cloudSyncLoginRedirect = cloudSyncLoginRedirect;
+window.syncConversationsToCloud = syncConversationsToCloud;
+window.syncConversationsFromCloud = syncConversationsFromCloud;
+window.cloudSyncLogout = cloudSyncLogout;
