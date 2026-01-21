@@ -45,14 +45,13 @@ const translationSnipptes = [
     "Get API key", "Uploading files...", "Invalid link", "Loading...", "Live Providers", "Custom Providers",
     "Search Off", "Search On", "Recognition On", "Recognition Off", "Delete Conversation",
     "Favorite Models:", "Stop Recording", "Record Audio", "Upload Audio", "No Title", "1 Copy",
+    "Delete all conversations?"
 ];
 
 let login_urls_storage = {
-    "Azure": ["Azure", "", []],
     "HuggingFace": ["HuggingFace", "https://huggingface.co/settings/tokens", ["HuggingFaceMedia"]],
-    "HuggingSpace": ["HuggingSpace", "", []],
     "PollinationsAI": ["Pollinations AI", "https://enter.pollinations.ai", []],
-    "Puter": ["Puter.js", "", []],
+    "PuterJS": ["Puter.js", "https://discord.gg/qXA4Wf4Fsm", []],
 };
 
 const modelTags = {
@@ -65,6 +64,47 @@ const modelTags = {
 
 document.addEventListener("DOMContentLoaded", (event) => {
     translationSnipptes.forEach((text) => framework.translate(text));
+    
+    // Listen for user tier updates from API responses
+    window.addEventListener('userTierUpdate', (event) => {
+        const userInfo = event.detail;
+        const infoBar = document.getElementById('user-tier-info');
+        const tierText = document.getElementById('user-tier-text');
+        const maxTokensText = document.getElementById('max-tokens-text');
+        const maxRequestsText = document.getElementById('max-requests-text');
+        const tierLimitsRow = document.getElementById('tier-limits-row');
+        
+        if (infoBar && (userInfo.tier || userInfo.remainingTokens !== null || userInfo.remainingRequests !== null)) {
+            if (userInfo.tier) {
+                infoBar.setAttribute('data-tier', userInfo.tier);
+                // Only update tier text if user is not logged in (keep username if logged in)
+                const sidebarLogoutBtn = document.getElementById('sidebar-logout-btn');
+                if (sidebarLogoutBtn && sidebarLogoutBtn.classList.contains('hidden')) {
+                    if (tierText) tierText.textContent = userInfo.tier;
+                }
+            }
+            if (maxTokensText && (userInfo.remainingTokens !== null || userInfo.limitTokens !== null)) {
+                const remaining = userInfo.remainingTokens !== null ? formatNumber(userInfo.remainingTokens) : '-';
+                const limit = userInfo.limitTokens !== null ? formatNumber(userInfo.limitTokens) : '-';
+                maxTokensText.innerHTML = `<i class="fa-solid fa-coins" aria-hidden="true"></i> ${remaining}/${limit}`;
+                maxTokensText.title = `Tokens: ${remaining} remaining of ${limit}`;
+                if (tierLimitsRow) tierLimitsRow.classList.remove('hidden');
+            }
+            if (maxRequestsText && (userInfo.remainingRequests !== null || userInfo.limitRequests !== null)) {
+                const remaining = userInfo.remainingRequests !== null ? userInfo.remainingRequests : '-';
+                const limit = userInfo.limitRequests !== null ? userInfo.limitRequests : '-';
+                maxRequestsText.innerHTML = `<i class="fa-solid fa-list" aria-hidden="true"></i> ${remaining}/${limit}`;
+                maxRequestsText.title = `Requests: ${remaining} remaining of ${limit}`;
+                if (tierLimitsRow) tierLimitsRow.classList.remove('hidden');
+            }
+        }
+    });
+    
+    function formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+        return num.toString();
+    }
     
     // Settings tabs functionality
     const settingsTabs = document.querySelectorAll('.settings-tab');
@@ -91,7 +131,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
                 targetContent.classList.add('active');
             }
             
-            // Save active tab to localStorage
+            // Save active tab to appStorage
             appStorage.setItem('settings-active-tab', targetTab);
         });
     });
@@ -127,6 +167,7 @@ let variant_storage = {};
 let debug_response_counter = {}
 let title_ids_storage = {};
 let image_storage = {};
+let headers_storage = {};
 let wakeLock = null;
 let countTokensEnabled = true;
 let suggestions = null;
@@ -211,8 +252,13 @@ async function playVoicePreview(voice) {
     
     const previewText = 'Hello, how are you?';
     const audioUrl = `https://g4f.dev/ai/audio/${encodeURIComponent(previewText)}?voice=${encodeURIComponent(voice)}`;
-    
-    voicePreviewAudio = new Audio(audioUrl);
+    const response = await fetch(audioUrl, {
+        headers: appStorage.getItem("session_token") ? {
+            'Authorization': `Bearer ${appStorage.getItem("session_token")}`
+        } : {}
+    });
+    const object = await response.blob();
+    voicePreviewAudio = new Audio(URL.createObjectURL(object));
     voicePreviewAudio.play().catch(error => {
         console.error('Error playing voice preview:', error);
     });
@@ -539,6 +585,17 @@ const register_message_buttons = async () => {
             const message_el = get_message_el(el);
             let audio;
             if (message_el.dataset.synthesize_url) {
+                console.log(message_el.dataset.synthesize_url)
+                if (message_el.dataset.synthesize_url.startsWith("https://g4f.dev/ai/audio/")) {
+                    const response = await fetch(message_el.dataset.synthesize_url, {
+                        headers: appStorage.getItem("session_token") ? {
+                            'Authorization': `Bearer ${appStorage.getItem("session_token")}`
+                        } : {}
+                    });
+                    window.captureUserTierHeaders?.(response.headers);
+                    const object = await response.blob();
+                    message_el.dataset.synthesize_url = URL.createObjectURL(object);
+                }
                 el.classList.add("active");
                 setTimeout(()=>el.classList.remove("active"), 2000);
                 const media_player = document.querySelector(".media-player");
@@ -641,6 +698,9 @@ const register_message_buttons = async () => {
 }
 
 const delete_conversations = async () => {
+    if (!confirm(framework.translate("Delete all conversations?"))) {
+        return;
+    }
     // Delete all conversations
     const { store, done } = await withStore('readwrite');
     store.clear();
@@ -1086,10 +1146,6 @@ async function add_message_chunk(message, message_id, provider, finish_message=n
         logContent.appendChild(p);
         await api("log", {...message, provider: provider_storage[message_id]});
     } else if (message.type == "preview") {
-        if (message_storage[message_id]) {
-            variant_storage[message_id] = message.preview;
-            return;
-        }
         let img;
         if (img = content_map.inner.querySelector("img")) {
             if (img.complete) {
@@ -1161,10 +1217,16 @@ async function add_message_chunk(message, message_id, provider, finish_message=n
         update_message(content_map, message_id, framework.markdown(message.login));
     } else if (message.type == "finish") {
         finish_storage[message_id] = message.finish;
+    } else if (message.type == "variant") {
+        variant_storage[message_id] = message.variant;
     } else if (message.type == "continue") {
         continue_storage[message_id] = message;
     } else if (message.type == "usage") {
         usage_storage[message_id] = message.usage;
+        if (headers_storage[message_id]) {
+            window.captureUserTierHeaders?.(new Headers(headers_storage[message_id]), message.usage);
+            delete headers_storage[message_id];
+        }
     } else if (message.type == "reasoning") {
         if (!reasoning_storage[message_id]) {
             reasoning_storage[message_id] = message;
@@ -1180,9 +1242,11 @@ async function add_message_chunk(message, message_id, provider, finish_message=n
         } if (message.token) {
             reasoning_storage[message_id].text += message.token;
         }
-        let reasoning_body = content_map.inner.querySelector(".reasoning_body") || content_map.inner;
-        reasoning_body.classList.remove("reasoning_body");
-        reasoning_body.innerHTML = render_reasoning(reasoning_storage[message_id]);
+        if (message.status || message.token || message.label) {
+            let reasoning_body = content_map.inner.querySelector(".reasoning_body") || content_map.inner;
+            reasoning_body.classList.remove("reasoning_body");
+            reasoning_body.innerHTML = render_reasoning(reasoning_storage[message_id]);
+        }
     } else if (message.type == "parameters") {
         if (!parameters_storage[provider]) {
             parameters_storage[provider] = {};
@@ -1213,7 +1277,9 @@ async function add_message_chunk(message, message_id, provider, finish_message=n
     } else if (["request", "response"].includes(message.type)) {
         debug_response_counter[message_id] = (debug_response_counter[message_id] || 0) + (message.type == "response" ? 1 : 0);
         logRequestResponse(message, message_id, debug_response_counter[message_id]);
-    }
+    } else if (message.type == "headers") {
+        headers_storage[message_id] = message.headers;
+    } 
 }
 
 function renderer(text) {
@@ -1410,7 +1476,6 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                 reasoning_storage[message_id],
                 action=="continue"
             );
-            delete message_storage[message_id];
             delete reasoning_storage[message_id];
             delete synthesize_storage[message_id];
             delete title_storage[message_id];
@@ -1434,7 +1499,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                     provider: message_provider?.name,
                     ...usage
                 };
-                const user = localStorage.getItem("user");
+                const user = appStorage.getItem("user");
                 if (user) {
                     usage = {user: user, ...usage};
                 }
@@ -1447,7 +1512,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
             delete controller_storage[message_id];
         }
         // Reload conversation if no error
-        if (!error_storage[message_id] && !document.body.classList.contains("screen-reader")) {
+        if (message_storage[message_id] && !document.body.classList.contains("screen-reader")) {
             try {
                 if(await safe_load_conversation(window.conversation_id)) {
                     // Play last message async
@@ -1462,6 +1527,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                 add_error("Failed to load the conversation:", e);
             }
         }
+        delete message_storage[message_id];
         let cursorDiv = message_el.querySelector(".cursor");
         if (cursorDiv) cursorDiv.parentNode.removeChild(cursorDiv);
         await safe_remove_cancel_button();
@@ -1490,17 +1556,59 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                 }
             });
         }
-        messages = messages.map((message) => {
+        // Helper function to solve bucket content
+        const solveBucketContent = async (item) => {
+            // Check if this is a media bucket (has url with /media/ path)
+            if (item.bucket_id && item.url && item.url.includes('/media/')) {
+                // For media buckets, add as image_url when schema is https
+                if (window.location.protocol === 'https:') {
+                    return {
+                        type: "image_url",
+                        image_url: {
+                            url: item.url
+                        }
+                    };
+                }
+                // For non-https, skip media content
+                return null;
+            }
+            // Check if this is a text bucket (has bucket_id but no media url)
+            if (item.bucket_id && !item.text) {
+                // Fetch plain text content from backend
+                try {
+                    const response = await fetch(`${framework.backendUrl}/backend-api/v2/files/${item.bucket_id}`);
+                    if (response.ok) {
+                        const text = await response.text();
+                        return {
+                            type: "text",
+                            text: text
+                        };
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch bucket content:", e);
+                }
+                return null;
+            }
+            // Regular text content
+            return {
+                type: "text",
+                text: item.text || ""
+            };
+        };
+        // Process messages with async bucket resolution
+        messages = await Promise.all(messages.map(async (message) => {
+            if (Array.isArray(message.content)) {
+                const resolvedContent = await Promise.all(message.content.map(solveBucketContent));
+                return {
+                    role: message.role,
+                    content: resolvedContent.filter(item => item !== null)
+                };
+            }
             return {
                 role: message.role,
-                content: Array.isArray(message.content) ? message.content.map((item) => {
-                    return {
-                        type: "text",
-                        text: item.text || ""
-                    }
-                }) : message.content
-            }
-        });
+                content: message.content
+            };
+        }));
     }
     if (messages.length > 0) {
         const last_message = messages[messages.length - 1];
@@ -1527,7 +1635,7 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
         const selectedModel = get_selected_model() || client.defaultModel;
         const modelType = selectedOption?.dataset.type || 'chat';
         const modelSeed = selectedOption?.dataset.seed;
-        const providerLabel = providerSelectOption?.dataset.label || provider;
+        let providerLabel = providerSelectOption?.dataset.label || provider;
         const isAudio = selectedOption?.dataset.audio == "true";
         try {
             // Conditionally call the correct client method based on model type.
@@ -1535,12 +1643,17 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                 const method = ['image', 'video'].includes(modelType) ? 'generate' : 'edit';
                 // Handle image generation
                 const image = image_storage ? Object.values(image_storage)[0] : null;
+                const isAutomaticOrientation = appStorage.getItem("automaticOrientation") != "false";
+                const imageHeight = isAutomaticOrientation ? (window.innerHeight > window.innerWidth ? 832 : 480) : undefined;
+                const imageWidth = isAutomaticOrientation ? (window.innerHeight > window.innerWidth ? 480 : 832) : undefined;
                 const response = await client.images[method]({
                     model: selectedModel,
                     prompt: message,
                     ...(modelSeed && regenerate ? { seed: Math.floor(Date.now() / 1000) } : {}),
                     ...(!modelSeed ? { response_format: 'b64_json' } : {}),
-                    ...(image && image.url ? { image: image.url } : {})
+                    ...(image && image.url ? { image: image.url } : {}),
+                    height: imageHeight,
+                    width: imageWidth,
                 });
                 if (!response.data) {
                     throw new Error(framework.translate("No image URL returned from the API."));
@@ -1609,17 +1722,33 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                 let hasModel = false;
                 let pendingToolCalls = [];
                 
+                add_message_chunk({type: "provider", provider: {name: provider, model: selectedModel, label: providerLabel}}, message_id);
+                
                 for await (const chunk of stream) {
                     if (chunk.usage) {
                         add_message_chunk({type: "usage", usage: chunk.usage}, message_id);
                     }
                     if (chunk.model && !hasModel) {
                         hasModel = true;
-                        add_message_chunk({type: "provider", provider: {name: chunk.provider || provider, model: chunk.model, label: providerLabel}}, message_id);
+                        if (chunk.server && chunk.provider) {
+                            provider = `custom:${chunk.server}`;
+                            providerLabel = chunk.provider;
+                        } else if (chunk.provider) {
+                            provider = chunk.provider || provider;
+                        }
+                        add_message_chunk({type: "provider", provider: {name: provider, model: chunk.model, label: providerLabel}}, message_id);
                     }
                     if (chunk.error) {
                         add_message_chunk({type: "error", ...chunk.error}, message_id, null, finish_message);
                         return;
+                    }
+                    if (chunk.conversation) {
+                        const conversation = await get_conversation(window.conversation_id);
+                        if (!conversation.data) {
+                            conversation.data = {};
+                        }
+                        conversation.data[provider] = chunk.conversation;
+                        await save_conversation(update_conversation(conversation));
                     }
                     if (chunk.choices) {
                         const choice = chunk.choices[0];
@@ -1638,18 +1767,9 @@ const ask_gpt = async (message_id, message_index = -1, regenerate = false, provi
                                 }
                             }
                         }
-
-                        if (chunk.conversation) {
-                            const conversation = await get_conversation(window.conversation_id);
-                            if (!conversation.data) {
-                                conversation.data = {};
-                            }
-                            conversation.data[provider] = chunk.conversation;
-                            await save_conversation(update_conversation(conversation));
-                        }
                         
-                        if (choice?.delta?.reasoning) {
-                            await add_message_chunk({type: "reasoning", token: choice?.delta?.reasoning}, message_id);
+                        if (choice?.delta?.reasoning || choice?.delta?.reasoning_content) {
+                            await add_message_chunk({type: "reasoning", token: choice?.delta?.reasoning || choice?.delta?.reasoning_content}, message_id);
                         } else {
                             const delta = choice?.delta?.content || '';
                             const processedDelta = delta.replaceAll("/media/", framework.backendUrl + "/media/")
@@ -2052,7 +2172,7 @@ const load_conversation = async (conversation, append = false) => {
             if (!framework.backendUrl || appStorage.getItem("voice")) {
                 // synthesize_params = (new URLSearchParams({input: filter_message(text), voice: appStorage.getItem("voice") || "alloy"})).toString();
                 // synthesize_url = `https://www.openai.fm/api/generate?${synthesize_params}`;
-                synthesize_url = `http://g4f.dev/ai/audio/${encodeURIComponent(filter_message(text))}?voice=${encodeURIComponent(appStorage.getItem("voice") || "alloy")}`;
+                synthesize_url = `https://g4f.dev/ai/audio/${encodeURIComponent(filter_message(text))}?voice=${encodeURIComponent(appStorage.getItem("voice") || "alloy")}`;
             } else {
                 if (item.synthesize) {
                     synthesize_params = item.synthesize.data
@@ -2199,6 +2319,9 @@ const load_conversation = async (conversation, append = false) => {
     });
 
     if (suggestions) {
+        if (!Array.isArray(suggestions)) {
+            suggestions = [suggestions];
+        }
         suggestions_el = document.createElement("div");
         suggestions_el.classList.add("suggestions");
         suggestions.forEach((suggestion)=> {
@@ -2646,19 +2769,25 @@ async function loadCustomProvidersFromAPI(customOptgroup, providersContainer = n
     if (!customOptgroup) return;
     
     try {
-        let response = await fetch("https://g4f.dev/custom/api/servers", {
-            headers: {'Authorization': `Bearer ${localStorage.getItem("session_token") || ""}`}
+        const url = "https://g4f.dev/custom/api/servers";
+        const resp = await fetch(url, {
+            headers: {'Authorization': `Bearer ${appStorage.getItem("session_token") || ""}`}
         });
-        if (!response.ok) {
-            response = await fetch("https://g4f.dev/custom/api/servers/public");
+        if (resp.status === 401) {
+            appStorage.removeItem("session_token");
         }
-        const data = await response.json();
-        const servers = data.servers || [];
-        
+        const publicUrl = "https://g4f.dev/custom/api/servers/public";
+        const publicResp = await fetch(publicUrl);
+        let data = await publicResp.json();
+        data = data.servers;
+        let privateData = await resp.json();
+        if (privateData.servers) {
+            data = data.concat(privateData.servers.filter(server=>!server.is_public));
+        }
         // Store servers globally for client creation
-        window.customServers = servers;
+        window.customServers = data;
         
-        servers.forEach(server => {
+        data.forEach(server => {
             // Check if this server already exists in dropdown
             const existingOption = customOptgroup.querySelector(`option[data-server-id="${server.id}"]`);
             if (!existingOption) {
@@ -3024,7 +3153,7 @@ Example:
     ]
 }
 \`\`\``;
-    if (localStorage.getItem(framework.translationKey)) {
+    if (appStorage.getItem(framework.translationKey)) {
         prompt += `\nRespond in ${navigator.language}.`;
     }
     try {
@@ -3063,15 +3192,25 @@ async function load_follow_up_questions(messages, new_response) {
   ]
 }
 \`\`\``;
-    if (localStorage.getItem(framework.translationKey)) {
+    if (appStorage.getItem(framework.translationKey)) {
         prompt += `\n\nRespond in language ${navigator.language}.`;
     }
     const new_messages = [{role: "assistant", content: new_response}, {role: "user", content: prompt}];
     console.log("Loading follow up questions with messages:", new_messages);
     try {
-        const response = await fetch("https://g4f.dev/ai/?json=true", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
-            messages: messages.concat(new_messages)
+        const response = await fetch("https://g4f.dev/ai/?json=true", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                ...appStorage.getItem("session_token") ? {"Authorization": `Bearer ${appStorage.getItem("session_token")}`} : {}
+            },
+            body: JSON.stringify({
+                messages: messages.concat(new_messages)
         })});
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+        }
+        window.captureUserTierHeaders?.(response.headers);
         const follow_up_questions = await response.json()
         suggestions = follow_up_questions.q || follow_up_questions.questions || follow_up_questions;
         const conversation = await get_conversation(window.conversation_id);
@@ -3223,9 +3362,6 @@ function get_modelTags(model, add_vision = true) {
         return " " + model.tags.join(" ")
     }
     const parts = []
-    if (modelTags[model.type]) {
-        parts.push(` ${modelTags[model.type]}`);
-    }
     for (let [name, text] of Object.entries(modelTags)) {
         if (name != "vision" || add_vision) {
             parts.push(model[name] ? ` ${text}` : "")
@@ -3442,7 +3578,7 @@ async function on_api() {
             if (name === "custom") {
                 return; // Skip custom here, will be added separately
             }
-            if (["together", "huggingface", "typegpt"].includes(name) && !localStorage.getItem(window.providerLocalStorage[name])) {
+            if (["together", "huggingface", "typegpt"].includes(name) && !appStorage.getItem(window.providerLocalStorage[name])) {
                 return;
             }
             let option = document.createElement("option");
@@ -3451,25 +3587,8 @@ async function on_api() {
             }
             option.value = name;
             option.dataset.live = "true";
-            option.text = `${config.label || name} ${config.tags}`;
+            option.text = `${config.label || name} ${config.tags} 🟢`;
             optgroup.appendChild(option);
-            const url = `https://g4f.dev/ai/${name}/ok?seed=${Math.floor(Date.now() / 1000 / 3600 / 24)}`;
-            let wait = 0;
-            const options = localStorage.getItem(window.providerLocalStorage[name]) ? { headers: {'authorization': `Bearer ${localStorage.getItem(window.providerLocalStorage[name])}`} } : undefined;
-            fetch(url).then((response) => {
-                if (response.ok) {
-                    option.text += " 🟢";
-                } else {
-                    wait += 12;
-                    setTimeout(() => {
-                        fetch(url, options).then((response) => {
-                            if (response.ok) {
-                                option.text += " 🟢";
-                            }
-                        });
-                    }, wait * 1000);
-                }
-            });
         });
         providerSelect.appendChild(optgroup);
 
@@ -3482,7 +3601,7 @@ async function on_api() {
             customOptgroup.disabled = true;
         }
         // Add Custom provider if configured (local custom provider)
-        if (localStorage.getItem("Custom-api_base")) {
+        if (appStorage.getItem("Custom-api_base")) {
             const customOption = document.createElement("option");
             customOption.value = "custom";
             customOption.dataset.live = "true";
@@ -3499,12 +3618,14 @@ async function on_api() {
         api("providers").then(async (providers) => {
             await load_providers(providers, provider_options, providersListContainer, providersToggleContainer);
             load_provider_models(appStorage.getItem("provider"));
+            set_favorite_providers();
         }).catch(async (e)=>{
             console.log(e)
             providerSelect.querySelectorAll("option:not([data-live])").forEach((el)=>el.remove());
             await load_provider_login_urls(providersListContainer);
             await load_settings(provider_options);
             await load_provider_models(appStorage.getItem("provider"));
+            set_favorite_providers();
         });
     } else {
         await load_provider_login_urls(providersListContainer);
@@ -3884,7 +4005,7 @@ async function upload_files(fileInput) {
     inputCount.innerText = framework.translate('{0} File(s) uploaded successfully').replace('{0}', count);
     if (result.files.length > 0) {
         let do_refine = document.getElementById("refine")?.checked;
-        connectToSSE(`${framework.backendUrl}/backend-api/v2/files/${bucket_id}`, do_refine, bucket_id);
+        connectToSSE(`${framework.backendUrl}/backend-api/v2/files/${bucket_id}/stream`, do_refine, bucket_id);
     } else {
         paperclip.classList.remove("blink");
         fileInput.value = "";
@@ -3921,7 +4042,7 @@ fileInput.addEventListener('change', async (event) => {
                                 appStorage.setItem(keyOption, data[key][keyOption]);
                                 count += 1;
                             });
-                        } else if (!localStorage.getItem(key)) {
+                        } else if (!appStorage.getItem(key)) {
                             if (key.startsWith("conversation:")) {
                                 await save_conversation(data[key]);
                                 count += 1;
@@ -4138,8 +4259,8 @@ async function read_response(response, message_id, provider, finish_message) {
 function get_api_key_by_provider(provider) {
     let api_key = null;
     if (provider) {
-        if (["gpt-oss-120b"].includes(provider)) {
-            return appStorage.getItem("Azure-api_key");
+        if (["Azure"].includes(provider)) {
+            return appStorage.getItem("session_token");
         }
         if (["custom"].includes(provider)) {
             return appStorage.getItem("Custom-api_key");
@@ -4169,8 +4290,11 @@ function get_api_key_by_provider(provider) {
         if (api_key) {
             api_key = appStorage.getItem(api_key);
         }
-        if (!api_key && provider.startsWith("Puter") && localStorage.getItem('puter.auth.token')) {
-            return localStorage.getItem("puter.auth.token");
+        if (!api_key && provider.startsWith("Puter") && appStorage.getItem('puter.auth.token')) {
+            return appStorage.getItem("puter.auth.token");
+        }
+        if (["GeminiPro", "Ollama", "Nvidia", "OpenRouterFree", "PollinationsAI", "Groq"].includes(provider)) {
+            return appStorage.getItem("session_token");
         }
     }
     return api_key;
@@ -4187,24 +4311,32 @@ function set_favorite_models(provider) {
         option.text = key;
         const value_option = modelSelect.querySelector(`option[value="${key}"]`)
         if (value_option) {
-            option.text = value_option.text;
-            if (value_option.dataset.audio) {
-                option.dataset.audio = "true";
+            const option = value_option.cloneNode(true);
+            optgroup.appendChild(option);
+            if (optgroup.childElementCount > 5) {
+                delete selected[optgroup.firstChild.value];
+                optgroup.removeChild(optgroup.firstChild);
             }
-            if (value_option.dataset.type) {
-                option.dataset.type = value_option.dataset.type;
-            }
-        }
-        optgroup.appendChild(option);
-        if (optgroup.childElementCount > 5) {
-            delete selected[optgroup.firstChild.value];
-            optgroup.removeChild(optgroup.firstChild);
         }
     });
     favorites[provider] = selected;
     appStorage.setItem("favorites", JSON.stringify(favorites));
     optgroup.lastChild?.setAttribute("selected", "selected");
     modelSelect.appendChild(optgroup);
+}
+
+function set_favorite_providers() {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = framework.translate("Favorite Providers:");
+    const favorites = JSON.parse(appStorage.getItem("favorite_providers") || "{}");
+    Object.keys(favorites).forEach((key) => {
+        const value_option = providerSelect.querySelector(`option[value="${key}"]`)
+        if (value_option) {
+            const option = value_option.cloneNode(true);
+            optgroup.appendChild(option);
+        }
+    });
+    providerSelect.appendChild(optgroup);
 }
 
 async function load_provider_models(provider=null, search=null) {
@@ -4218,7 +4350,7 @@ async function load_provider_models(provider=null, search=null) {
     modelSelect.innerHTML = '';
     modelSelect.name = `model[${provider}]`;
     modelSelect.classList.remove("hidden");
-    if (provider == "PuterJS" && !localStorage.getItem("puter.auth.token") && window.Puter) {
+    if (provider == "PuterJS" && !appStorage.getItem("puter.auth.token") && window.Puter) {
         try {
             await (await (new window.Puter()).puter).auth.signIn({attempt_temp_user_creation: true}).then((res) => {
                 console.log('PuterJS signed in:', res);
@@ -4281,7 +4413,27 @@ async function load_provider_models(provider=null, search=null) {
     }
 };
 if (providerSelect) {
-    providerSelect.addEventListener("change", () => load_provider_models());
+    providerSelect.addEventListener("change", () => {
+        load_provider_models()
+        const favorites = appStorage.getItem("favorite_providers") ? JSON.parse(appStorage.getItem("favorite_providers")) : {};
+        const selected = providerSelect.options[providerSelect.selectedIndex];
+        console.log("Selected provider:", providerSelect.value, selected);
+        if (!favorites[providerSelect.value]) {
+            const option = selected.cloneNode(true);
+            const optgroup = providerSelect.querySelector('optgroup:last-child');
+            if (optgroup) {
+                optgroup.appendChild(option);
+                if (optgroup.childElementCount > 5) {
+                    delete favorites[optgroup.firstChild.value];
+                    optgroup.removeChild(optgroup.firstChild);
+                }
+            }
+        }
+        const selected_values = favorites[providerSelect.value] ? favorites[providerSelect.value] + 1 : 1;
+        delete favorites[providerSelect.value];
+        favorites[providerSelect.value] = selected_values;
+        appStorage.setItem("favorite_providers", JSON.stringify(favorites));
+    });
 }
 modelSelect.addEventListener("change", () => {
     const favorites = appStorage.getItem("favorites") ? JSON.parse(appStorage.getItem("favorites")) : {};
@@ -4289,18 +4441,7 @@ modelSelect.addEventListener("change", () => {
     const selectedOption = modelSelect.options[modelSelect.selectedIndex];
     console.log("Selected model:", modelSelect.value, selectedOption);
     if (!selected[modelSelect.value]) {
-        let option = document.createElement('option');
-        option.value = modelSelect.value;
-        if (selectedOption.dataset.type) {
-            option.dataset.type = selectedOption.dataset.type;
-        }
-        if (selectedOption.dataset.seed) {
-            option.dataset.seed = "true";
-        }
-        if (selectedOption.dataset.audio) {
-            option.dataset.audio = "true";
-        }
-        option.text = modelSelect.querySelector(`option[value="${modelSelect.value}"]`).text;
+        const option = selectedOption.cloneNode(true);
         option.selected = true;
         const optgroup = modelSelect.querySelector('optgroup:last-child');
         if (optgroup) {
@@ -4488,11 +4629,15 @@ async function get_recognition_language() {
         if (locale) {
             return locale;
         }
-        const prompt = 'Response the full locale in JSON. Example: {"locale": "en-US"} Language: ' + navigator.language
-        response = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?json=true`);
-        locale = (await response.json()).locale || navigator.language;
-        if (locale.includes("-")) {
-            appStorage.setItem(navigator.language, locale);
+        try {
+            const prompt = 'Response the full locale in JSON. Example: {"locale": "en-US"} Language: ' + navigator.language
+            response = await framework.query(prompt, true);
+            locale = (await response.json()).locale || navigator.language;
+            if (locale.includes("-")) {
+                appStorage.setItem(navigator.language, locale);
+            }
+        } catch (e) {
+            add_error(e, true);
         }
     }
     return locale;
@@ -4588,6 +4733,11 @@ function hideLog() {
 
 function logRequestResponse(event, messageId, count=0) {
     const eventType = event.response ? "response" : "request";
+    if (eventType == "response") {
+        if (count > 5 && event?.response?.choices && event.response.choices[0] && event.response.choices[0]?.delta?.content) {
+            return;
+        }
+    }
     let details = document.createElement("details");
     let summary = document.createElement("summary");
     summary.textContent = `${eventType[0].toUpperCase() + eventType.slice(1)} ${messageId} #${count}`;
@@ -5241,28 +5391,28 @@ async function loadClientModels() {
     }
 }
 
-// Import old conversations from localStorage into IndexedDB
-async function import_from_localStorage() {
+// Import old conversations from appStorage into IndexedDB
+async function import_from_appStorage() {
   const prefix = 'conversation:';
-  const keys = Object.keys(localStorage).filter(k => k.startsWith(prefix));
+  const keys = Object.keys(appStorage).filter(k => k.startsWith(prefix));
 
   for (const key of keys) {
     try {
-      const json = localStorage.getItem(key);
+      const json = appStorage.getItem(key);
       if (!json) continue;
       const conv = JSON.parse(json);
       // Use the id from conversation, if missing fallback to key after prefix
       conv.id = conv.id || key.substring(prefix.length);
       conv.updated = conv.updated || Date.now();
       await save_conversation(conv);
-      localStorage.removeItem(key); // Optionally clear old storage
+      appStorage.removeItem(key); // Optionally clear old storage
     } catch (e) {
-      console.warn(`Skipping localStorage item ${key} due to error`, e);
+      console.warn(`Skipping appStorage item ${key} due to error`, e);
     }
   }
 }
 
-import_from_localStorage();
+import_from_appStorage();
 
 /**
  * Insert or wrap text with Markdown triple back‑ticks (```).
@@ -5577,7 +5727,7 @@ async function handleToolCalls(toolCalls, messages, model, provider, message_id,
 const CLOUD_SYNC_API = "https://g4f.dev/members/api";
 
 async function checkCloudSyncSession() {
-    const token = appStorage.getItem("cloudSyncToken");
+    const token = appStorage.getItem("session_token");
     if (!token) {
         showCloudSyncLogin();
         return;
@@ -5592,12 +5742,12 @@ async function checkCloudSyncSession() {
                 showCloudSyncLoggedIn(data.user);
                 return;
             } else {
-                appStorage.removeItem("cloudSyncToken");
+                appStorage.removeItem("session_token");
                 showCloudSyncLogin();
                 return;
             }
         } else {
-            appStorage.removeItem("cloudSyncToken");
+            appStorage.removeItem("session_token");
             showCloudSyncLogin();
             return;
         }
@@ -5613,6 +5763,16 @@ function showCloudSyncLogin() {
     const syncSection = document.getElementById("cloudSyncSection");
     if (loginSection) loginSection.style.display = "block";
     if (syncSection) syncSection.style.display = "none";
+    
+    // Update sidebar login/logout buttons
+    const sidebarLoginBtn = document.getElementById("sidebar-login-btn");
+    const sidebarLogoutBtn = document.getElementById("sidebar-logout-btn");
+    const tierText = document.getElementById("user-tier-text");
+    const tierLimitsRow = document.getElementById("tier-limits-row");
+    if (sidebarLoginBtn) sidebarLoginBtn.classList.remove("hidden");
+    if (sidebarLogoutBtn) sidebarLogoutBtn.classList.add("hidden");
+    if (tierText) tierText.textContent = "Guest";
+    if (tierLimitsRow) tierLimitsRow.classList.add("hidden");
 }
 
 function showCloudSyncLoggedIn(user) {
@@ -5622,20 +5782,39 @@ function showCloudSyncLoggedIn(user) {
     if (loginSection) loginSection.style.display = "none";
     if (syncSection) syncSection.style.display = "block";
     if (userEl) userEl.textContent = user.name || user.email || "User";
-}
-
-function cloudSyncLoginRedirect(provider = "github") {
-    const returnUrl = encodeURIComponent(window.location.href);
-    const loginUrl = `https://g4f.dev/members/oauth/${provider}?redirect_chat=${returnUrl}`;
-    window.location.href = loginUrl;
+    
+    // Update sidebar login/logout buttons
+    const sidebarLoginBtn = document.getElementById("sidebar-login-btn");
+    const sidebarLogoutBtn = document.getElementById("sidebar-logout-btn");
+    const tierText = document.getElementById("user-tier-text");
+    const tierLimitsRow = document.getElementById("tier-limits-row");
+    const infoBar = document.getElementById("user-tier-info");
+    if (sidebarLoginBtn) sidebarLoginBtn.classList.add("hidden");
+    if (sidebarLogoutBtn) sidebarLogoutBtn.classList.remove("hidden");
+    if (tierText) tierText.textContent = user.name || user.email || "User";
+    if (tierLimitsRow) tierLimitsRow.classList.remove("hidden");
+    if (infoBar && user.tier) {
+        infoBar.setAttribute("data-tier", user.tier);
+    }
 }
 
 function handleCloudSyncCallback() {
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get("session_token");
+    let token = urlParams.get("session_token");
+    
+    // Also check hash fragment for session token (starts with g4f_ or gfs_)
+    if (!token && window.location.hash) {
+        const hashValue = decodeURIComponent(window.location.hash.substring(1));
+        if (hashValue.startsWith("g4f_") || hashValue.startsWith("gfs_")) {
+            token = hashValue;
+        }
+    }
+    
     const userParam = urlParams.get("user");
+    const openSettings = urlParams.get("settings") === "true";
+    
     if (token) {
-        appStorage.setItem("cloudSyncToken", token);
+        appStorage.setItem("session_token", token);
         
         // Parse and use user info if provided
         if (userParam) {
@@ -5647,17 +5826,18 @@ function handleCloudSyncCallback() {
             }
         }
         
-        // Clean up URL
+        // Clean up URL by removing session_token, user, settings params and hash
         const url = new URL(window.location.href);
         url.searchParams.delete("session_token");
         url.searchParams.delete("user");
+        url.searchParams.delete("settings");
+        url.hash = "";
         window.history.replaceState({}, document.title, url.pathname + url.search);
         
-        // Open settings to cloud sync tab
-        if (typeof open_settings === "function") {
+        // Open settings to cloud sync tab if requested
+        if (openSettings && typeof open_settings === "function") {
             setTimeout(() => {
                 open_settings();
-                // Switch to cloud sync tab
                 const cloudSyncTab = document.querySelector('.settings-tab[data-tab="cloudsync"]');
                 if (cloudSyncTab) cloudSyncTab.click();
             }, 100);
@@ -5668,7 +5848,7 @@ function handleCloudSyncCallback() {
 }
 
 async function cloudSyncLogout() {
-    const token = appStorage.getItem("cloudSyncToken");
+    const token = appStorage.getItem("session_token");
     if (token) {
         try {
             await fetch(`${CLOUD_SYNC_API}/logout`, {
@@ -5679,7 +5859,7 @@ async function cloudSyncLogout() {
             console.error("Logout failed:", e);
         }
     }
-    appStorage.removeItem("cloudSyncToken");
+    appStorage.removeItem("session_token");
     showCloudSyncLogin();
 }
 
@@ -5707,7 +5887,7 @@ function hideCloudSyncLoading() {
 }
 
 async function syncConversationsToCloud() {
-    const token = appStorage.getItem("cloudSyncToken");
+    const token = appStorage.getItem("session_token");
     if (!token) {
         cloudSyncLoginRedirect();
         return;
@@ -5745,7 +5925,7 @@ async function syncConversationsToCloud() {
 }
 
 async function syncConversationsFromCloud() {
-    const token = appStorage.getItem("cloudSyncToken");
+    const token = appStorage.getItem("session_token");
     if (!token) {
         cloudSyncLoginRedirect();
         return;
@@ -5787,13 +5967,20 @@ async function syncConversationsFromCloud() {
 handleCloudSyncCallback();
 checkCloudSyncSession();
 
+// Redirect to members login page
+function cloudSyncLoginRedirect(openSettings = false) {
+    const returnUrl = encodeURIComponent(window.location.href);
+    const settingsParam = openSettings ? "&settings=true" : "";
+    window.location.href = `https://g4f.dev/members?redirect=${returnUrl}${settingsParam}`;
+}
+
 // Cloud Sync button event listeners
 const cloudSyncLoginBtn = document.getElementById("cloudSyncLoginBtn");
 const cloudSyncUploadBtn = document.getElementById("cloudSyncUpload");
 const cloudSyncDownloadBtn = document.getElementById("cloudSyncDownload");
 const cloudSyncLogoutBtn = document.getElementById("cloudSyncLogoutBtn");
 
-if (cloudSyncLoginBtn) cloudSyncLoginBtn.addEventListener("click", () => cloudSyncLoginRedirect("github"));
+if (cloudSyncLoginBtn) cloudSyncLoginBtn.addEventListener("click", () => cloudSyncLoginRedirect(true));
 if (cloudSyncUploadBtn) cloudSyncUploadBtn.addEventListener("click", syncConversationsToCloud);
 if (cloudSyncDownloadBtn) cloudSyncDownloadBtn.addEventListener("click", syncConversationsFromCloud);
 if (cloudSyncLogoutBtn) cloudSyncLogoutBtn.addEventListener("click", cloudSyncLogout);

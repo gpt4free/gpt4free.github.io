@@ -1,5 +1,5 @@
 
-import { Client, Pollinations, DeepInfra, Puter, HuggingFace, Worker, Audio } from "./client.js";
+import { Client, Pollinations, DeepInfra, Puter, HuggingFace, Worker, Audio, captureUserTierHeaders } from "./client.js";
 let fs;
 if (typeof window === "undefined") {
     fs = require("fs");
@@ -63,6 +63,7 @@ async function createClient(provider, options = {}) {
         providers = await loadProviders();
     }
     if (!providers[provider]) {
+        return new Client({ baseUrl: `/api/${provider}` });
         throw new Error(`Provider "${provider}" not found.`);
     }
     const { class: ClientClass = (providerClassMap[provider] || Client), backupUrl, localStorageApiKey, tags, ...config } = providers[provider];
@@ -79,6 +80,7 @@ async function createClient(provider, options = {}) {
     // Set baseUrl
     if (backupUrl && !options.apiKey && !options.baseUrl) {
         options.baseUrl = backupUrl;
+        options.apiKey = (typeof window !== "undefined" ? window?.localStorage.getItem("session_token") : undefined);
         options.sleep = 10000; // 10 seconds delay to avoid rate limiting
     }
 
@@ -101,4 +103,4 @@ async function createClient(provider, options = {}) {
     return new ClientClass({ ...config, ...options });
 }
 
-export { loadProviders, createClient, providerLocalStorage, Puter };
+export { loadProviders, createClient, providerLocalStorage, captureUserTierHeaders,Puter };

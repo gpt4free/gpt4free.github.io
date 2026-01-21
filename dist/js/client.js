@@ -62,15 +62,53 @@ function extractRetryDelay(message) {
     return null;
 }
 
-async function get_error_message(response) {
+async function getErrorMessage(response) {
     try {
-        const data = await response.clone().json();
+        let data = await response.clone().json();
+        if (Array.isArray(data) && data) {
+            data = data[0];
+        }
         if (data.error?.message) {
             return data.error.message
         }
     } catch { }
     return await response.text();
 }
+
+function captureUserTierHeaders(headers, usage) {
+    if (!headers) return;
+    const limitRequests = headers.get('x-ratelimit-limit-requests');
+    const limitTokens = headers.get('x-ratelimit-limit-tokens');
+    if (!limitRequests && !limitTokens) return;
+    const isCached = (usage?.cache || headers.get('x-cache')) === 'HIT';
+    const userTier = headers.get('x-user-tier');
+    const modelFactor = parseFloat(headers.get('x-ratelimit-model-factor') || '1');
+    const remainingRequests = parseInt(headers.get('x-ratelimit-remaining-requests') || '1') - (usage ? 1 : 0);
+    let totalTokens = usage?.total_tokens || parseInt(headers.get('x-usage-total-tokens') || '0');
+    let remainingTokens = parseInt(headers.get('x-ratelimit-remaining-tokens') || '0');
+    if (!isCached && totalTokens > 0) {
+        remainingTokens -= totalTokens * modelFactor;
+    }
+    if (userTier || remainingRequests || remainingTokens || limitRequests || limitTokens) {
+        const userInfo = {
+            tier: userTier,
+            remainingRequests: remainingRequests,
+            remainingTokens: remainingTokens,
+            limitRequests: limitRequests ? parseInt(limitRequests, 10) : null,
+            limitTokens: limitTokens ? parseInt(limitTokens, 10) : null
+        };
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent('userTierUpdate', { detail: userInfo }));
+        }
+    }
+}
+
+const toBase64 = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+});
 
 class Client {
     constructor(options = {}) {
@@ -214,6 +252,8 @@ class Client {
                 model.type = 'image';
               } else if (model.id.toLowerCase().includes("video")) {
                 model.type = 'video';
+              } else if (model.video) {
+                model.type = 'video';
               } else if (model.supports_chat) {
                 model.type = 'chat';
               } else if (model.supports_images) {
@@ -275,35 +315,39 @@ class Client {
             body: formData,
             ...requestOptions
         });
+        captureUserTierHeaders(response.headers);
         if (!response.ok) {
-            const errorBody = await get_error_message(response);
+            const errorBody = await getErrorMessage(response);
             throw new Error(`Status ${response.status}: ${errorBody}`);
         }
-        const toBase64 = file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-        });
         return {data: [{url: await toBase64(await response.blob())}]};
     }
 
     async _regularCompletion(response) {
         if (!response.ok) {
-            const errorBody = await get_error_message(response);
+            const errorBody = await getErrorMessage(response);
+            captureUserTierHeaders(response.headers);
             throw new Error(`Status ${response.status}: ${errorBody}`);
         }
         const data = await response.json();
         if (response.headers.get('x-provider')) {
             data.provider = response.headers.get('x-provider');
         }
+        if (!data.model && response.headers.get('x-model')) {
+            data.model = response.headers.get('x-model');
+        }
+        if (response.headers.get('x-server')) {
+            data.server = response.headers.get('x-server');
+        }
+        // Capture user tier info from headers
+        captureUserTierHeaders(response.headers, data.usage);
         this.logCallback && this.logCallback({response: data, type: 'chat'});
         return data;
     }
 
     async *_streamCompletion(response) {
       if (!response.ok) {
-        const errorBody = await get_error_message(response);
+        const errorBody = await getErrorMessage(response);
         throw new Error(`Status ${response.status}: ${errorBody}`);
       }
       if (!response.body) {
@@ -312,6 +356,7 @@ class Client {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let usage = {};
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -324,6 +369,8 @@ class Client {
             parts =  [buffer];
             buffer = '';
           } else {
+            // Capture user tier info from headers
+            captureUserTierHeaders(response.headers, usage);
             break;
           }
           for (const part of parts) {
@@ -331,6 +378,9 @@ class Client {
             try {
               if (part.startsWith('data: ')) {
                 const data = JSON.parse(part.slice(6));
+                if (data.usage) {
+                    usage = data.usage;
+                }
                 if (data.choices === undefined) {
                     if (data.response) {
                         data.choices = [{delta: {content: "" + data.response}}];
@@ -342,10 +392,19 @@ class Client {
                 if (response.headers.get('x-provider')) {
                     data.provider = response.headers.get('x-provider');
                 }
+                if (!data.model && response.headers.get('x-model')) {
+                    data.model = response.headers.get('x-model');
+                }
+                if (response.headers.get('x-server')) {
+                    data.server = response.headers.get('x-server');
+                }
                 this.logCallback && this.logCallback({response: data, type: 'chat'});
                 yield data;
               } else if (response.headers.get('Content-Type').startsWith('application/json')) {
                 const data = JSON.parse(part);
+                if (data.usage) {
+                    usage = data.usage;
+                }
                 if (data.choices && data.choices[0]?.message) {
                     data.choices[0].delta = data.choices[0].message;
                 } else if (data.choices === undefined) {
@@ -370,6 +429,9 @@ class Client {
                 if (response.headers.get('x-provider')) {
                     data.provider = response.headers.get('x-provider');
                 }
+                if (response.headers.get('x-server')) {
+                    data.server = response.headers.get('x-server');
+                }
                 this.logCallback && this.logCallback({response: data, type: 'chat'});
                 yield data;
             }
@@ -389,7 +451,6 @@ class Client {
         delete payload.prompt;
         delete payload.response_format;
         if (payload.nologo === undefined) payload.nologo = true;
-        if (this.extraBody.referrer) payload.referrer = this.extraBody.referrer;
         if (payload.size) {
             payload.width = payload.size.split('x')[0];
             payload.height = payload.size.split('x')[1];
@@ -408,8 +469,12 @@ class Client {
                 await new Promise(resolve => setTimeout(resolve, retryAfter));
                 return this._defaultImageGeneration(imageEndpoint, params, requestOptions);
             }
-            const errorBody = await get_error_message(response);
+            const errorBody = await getErrorMessage(response);
             throw new Error(`Status ${response.status}: ${errorBody}`);
+        }
+        if (params.response_format === 'b64_json') {
+            const data = await response.blob();
+            return {data: [{b64_json: await toBase64(data).then(b64 => b64.split(',')[1])}]};
         }
         return {data: [{url: response.url}]}
     }
@@ -423,6 +488,7 @@ class Client {
         this.logCallback && this.logCallback({request: params, type: 'image'});
         await this._sleep();
         let response = await fetch(imageEndpoint, requestOptions);
+        captureUserTierHeaders(response.headers);
         if (!response.ok) {
             const delay = parseInt(response.headers.get('Retry-After'), 10) || extractRetryDelay(await response.clone().text()) || this.sleep / 1000;
             if (delay > 0) {
@@ -432,7 +498,7 @@ class Client {
             }
         }
         if (!response.ok) {
-            const errorBody = await get_error_message(response);
+            const errorBody = await getErrorMessage(response);
             throw new Error(`Status ${response.status}: ${errorBody}`);
         }
         if (response.headers.get('Content-Type').startsWith('application/json')) {
@@ -446,12 +512,6 @@ class Client {
             }
             return data;
         }
-        const toBase64 = file => new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-        });
         return {data: [{url: await toBase64(await response.blob())}]};
     }
 }
@@ -459,22 +519,53 @@ class Client {
 class PollinationsAI extends Client {
     constructor(options = {}) {
         super({
+            ...options,
             baseUrl: options.apiKey ? 'https://gen.pollinations.ai/v1' : options.baseUrl || 'https://text.pollinations.ai',
-            apiEndpoint: options.apiKey ? null : options.apiEndpoint || 'https://text.pollinations.ai/openai',
+            apiEndpoint: options.apiKey || options.baseUrl ? null : options.apiEndpoint || 'https://text.pollinations.ai/openai',
             imageEndpoint: options.apiKey ? 'https://gen.pollinations.ai/image/{prompt}' : options.imageEndpoint || 'https://image.pollinations.ai/prompt/{prompt}',
-            modelsEndpoint: options.apiKey ? 'https://gen.pollinations.ai/text/models' : options.modelsEndpoint || 'https://g4f.dev/api/pollinations/models',
-            defaultModel: 'openai',
-            extraBody: {
-                referrer: 'https://g4f.dev/',
+            modelsEndpoint: options.modelsEndpoint || 'https://gen.pollinations.ai/text/models',
+            imageModelsEndpoint: options.imageModelsEndpoint || options.apiKey ? 'https://gen.pollinations.ai/image/models' : 'https://image.pollinations.ai/models',
+            defaultModel: options.defaultModel || 'openai',
+            extraBody: options.extraBody || {
                 seed: 10352102
             },
             modelAliases: {
                 "sdxl-turbo": "turbo",
                 "gpt-image": "gptimage",
                 "flux-kontext": "kontext",
-            },
-            ...options
+                ...(options.modelAliases || {})
+            }
         });
+        if (!options.apiKey) {
+            this.balance = this.checkBalance();
+        }
+    }
+
+    async checkBalance() {
+        const PUBLIC_KEY = ["pk", "_B9YJX5SBohhm2ePq"];
+        const BALANCE_ENDPOINT = "https://gen.pollinations.ai/account/balance";
+        return fetch(BALANCE_ENDPOINT, {headers: {
+            'Authorization': `Bearer ${PUBLIC_KEY.join('')}`
+        }}).then(r=>r.json()).then(d=>{
+            console.log(`PollinationsAI balance: ${d.balance}`);
+            if (d.balance > 0) {
+                this.apiKey = PUBLIC_KEY.join('');
+                this.baseUrl = 'https://gen.pollinations.ai/v1';
+                this.apiEndpoint = 'https://gen.pollinations.ai/v1/chat/completions';
+                this.extraHeaders['Authorization'] = `Bearer ${this.apiKey}`;
+                const userInfo = {
+                    tier: 'free',
+                    remainingRequests: 10,
+                    remainingTokens: d.balance * 1000,
+                    limitRequests: 10,
+                    limitTokens: 20 * 1000
+                };
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent('userTierUpdate', { detail: userInfo }));
+                }
+            }
+            return d.balance;
+        })
     }
 
     get models() {
@@ -497,7 +588,7 @@ class PollinationsAI extends Client {
                 });
             }
             try {
-                const imageModelsUrl = this.apiKey ? 'https://gen.pollinations.ai/image/models' : 'https://g4f.dev/api/pollinations/image/models';
+                const imageModelsUrl = 'https://gen.pollinations.ai/image/models';
                 imageModelsResponse = await fetch(imageModelsUrl);
                 if (!imageModelsResponse.ok) {
                     const delay = parseInt(response.headers.get('Retry-After'), 10);
@@ -553,9 +644,6 @@ class Audio extends Client {
     constructor(options = {}) {
         super({
             apiEndpoint: 'https://text.pollinations.ai/openai',
-            extraBody: {
-                referrer: 'https://g4f.dev/'
-            },
             defaultModel: 'openai-audio',
             ...options
         });
@@ -591,7 +679,6 @@ class Audio extends Client {
                     if (!this.baseUrl) {
                         throw new Error('No baseUrl defined');
                     }
-                    delete options.referrer;
                     requestOptions.body = JSON.stringify(options);
                     response = await fetch(`${this.baseUrl}/chat/completions`, requestOptions);
                     this.logCallback && this.logCallback({request: options, type: 'chat'});
@@ -935,5 +1022,5 @@ class HuggingFace extends Client {
 }
 
 
-export { Client, Pollinations, PollinationsAI, DeepInfra, Together, Puter, HuggingFace, Worker, Audio };
+export { Client, Pollinations, PollinationsAI, DeepInfra, Together, Puter, HuggingFace, Worker, Audio, captureUserTierHeaders };
 export default Client;

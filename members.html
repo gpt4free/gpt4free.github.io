@@ -164,7 +164,7 @@
         }
 
         .oauth-btn.pollinations {
-            background: var(--pollinations);
+            background: white;
             color: #333;
         }
         
@@ -334,6 +334,11 @@
         .btn-small {
             padding: 0.5rem 1rem;
             font-size: 0.9rem;
+        }
+
+        .btn a {
+            color: white;
+            text-decoration: none;
         }
         
         .base-url {
@@ -935,11 +940,6 @@
                     🤗
                     Sign in with Hugging Face
                 </button>
-                
-                <button class="oauth-btn pollinations" id="redirectLoginPollinations">
-                    🌸
-                    Sign in with Pollinations
-                </button>
             </div>
             
             <p style="margin-top: 1.5rem;">
@@ -1120,9 +1120,12 @@
                             Add HuggingFace
                         </button>
                         <button class="oauth-btn pollinations" id="addPollinationsServerBtn" style="flex: 1;">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                            🌸
                             Add Pollinations
                         </button>
+                        <button class="oauth-btn puter" id="addPuterServerBtn" style="flex: 1;">
+                            🤖
+                            Add Puter
                     </div>
                 </div>
                 
@@ -1223,7 +1226,6 @@
         const redirectLoginGithub = document.getElementById('redirectLoginGithub');
         const redirectLoginDiscord = document.getElementById('redirectLoginDiscord');
         const redirectLoginHuggingface = document.getElementById('redirectLoginHuggingface');
-        const redirectLoginPollinations = document.getElementById('redirectLoginPollinations');
         const logoutBtn = document.getElementById('logoutBtn');
         const userName = document.getElementById('userName');
         const generateKeyBtn = document.getElementById('generateKeyBtn');
@@ -1271,7 +1273,18 @@
 
         // Toast notification
         function showToast(message, type = 'success') {
-            toast.textContent = message;
+            toast.textContent = framework ? framework.translate(message) : message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function showToastFormat(message, type = 'success', ...args) {
+            message = framework ? framework.translate(message) : message;
+            const formattedMessage = message.replace(/{(\d+)}/g, (match, number) => 
+                typeof args[number] != 'undefined' ? args[number] : match
+            );
             toast.className = 'toast ' + type + ' show';
             setTimeout(() => {
                 toast.classList.remove('show');
@@ -1338,9 +1351,9 @@
             dashboard.classList.add('active');
             
             // Update user info
-            userName.textContent = user.name || user.username || 'User';
+            userName.textContent = user.name || user.username || framework.translate('User');
             document.getElementById('accountUsername').textContent = user.username || user.name || '-';
-            document.getElementById('accountEmail').textContent = user.email || 'Not provided';
+            document.getElementById('accountEmail').textContent = user.email || framework.translate('Not provided');
             document.getElementById('accountJoined').textContent = user.created_at ? new Date(user.created_at).toLocaleDateString() : (user.joinedAt || new Date().toLocaleDateString());
             
             // Update tier badge
@@ -1368,7 +1381,7 @@
             const existingKey = localStorage.getItem('g4f_api_key');
             if (existingKey) {
                 apiKeyInput.value = existingKey;
-                apiKeyInput.placeholder = 'API key loaded from storage';
+                apiKeyInput.placeholder = framework.translate('API key loaded from storage');
             }
             
             // Update base URL
@@ -1450,11 +1463,7 @@
 
         // Hugging Face OAuth
         loginHuggingface.addEventListener('click', async () => {
-            if (window.oauthConfig) {
-                window.location.href = await oauthLoginUrl(window.oauthConfig);
-            } else {
-                showToast('Hugging Face OAuth not configured', 'error');
-            }
+            window.location.href = `${API_BASE}/members/auth/huggingface`;
         });
 
         // Redirect login buttons (include redirect parameter for temp API key)
@@ -1470,10 +1479,6 @@
             window.location.href = `${API_BASE}/members/auth/huggingface?redirect=${encodeURIComponent(externalRedirect)}`;
         });
 
-        redirectLoginPollinations.addEventListener('click', () => {
-            window.location.href = `https://enter.pollinations.ai/authorize?redirect_url=${encodeURIComponent(externalRedirect)}`;
-        });
-
         // Handle OAuth callback
         async function handleOAuthCallback() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -1484,7 +1489,7 @@
             const error = urlParams.get('error');
 
             if (error) {
-                showToast('Authentication failed: ' + error, 'error');
+                showToastFormat('Authentication failed: {0}', 'error', error);
                 window.history.replaceState({}, document.title, window.location.pathname);
                 return;
             }
@@ -1497,7 +1502,7 @@
                     localStorage.setItem('g4f_session', session);
                     localStorage.setItem('g4f_user', JSON.stringify(user));
                     localStorage.setItem('user', user.name || user.username);
-                    showToast(`Successfully signed in with ${user.provider}!`);
+                    showToastFormat('Successfully signed in with {0}!', 'success', user.provider);
                     window.history.replaceState({}, document.title, window.location.pathname);
                     showDashboard(user);
                     return;
@@ -1533,10 +1538,10 @@
 
             // Handle Pollinations OAuth (API key from URL hash)
             const hash = window.location.hash;
-            if (hash && (hash.startsWith('#polln_') || hash.startsWith('#pk_'))) {
-                const pollinationsToken = hash.replace('#', '');
+            if (hash && (hash.startsWith('#api_key='))) {
+                const pollinationsToken = hash.substring(9);
                 if (pollinationsToken) {
-                    const response = await fetch('https://gen.pollinations.ai/text/hello', {
+                    const response = await fetch('https://pollinations.g4f-dev.workers.dev/api/usage', {
                         headers: {
                             'Authorization': `Bearer ${pollinationsToken}`
                         }
@@ -1547,14 +1552,14 @@
                         localStorage.setItem('pollinations_pending_server', pollinationsToken);
                         showToast('Successfully signed in with Pollinations!');
                         window.history.replaceState({}, document.title, window.location.pathname);
-                        redirectLoginPollinations.style.display = 'none';
+                        addPollinationsServerBtn.style.display = 'none';
                     }
                     return;
                 }
             } else {
                 const existingToken = localStorage.getItem('PollinationsAI-api_key');
                 if (existingToken) {
-                    const response = await fetch('https://gen.pollinations.ai/text/hello', {
+                    const response = await fetch('https://pollinations.g4f-dev.workers.dev/api/usage', {
                         headers: {
                             'Authorization': `Bearer ${existingToken}`
                         }
@@ -1562,7 +1567,7 @@
                     if (!response.ok) {
                         localStorage.removeItem('PollinationsAI-api_key');
                     } else {
-                        redirectLoginPollinations.style.display = 'none';
+                        addPollinationsServerBtn.style.display = 'none';
                     }
                 }
             }
@@ -1611,7 +1616,7 @@
             }
 
             generateKeyBtn.disabled = true;
-            generateKeyBtn.innerHTML = '<span class="loading"></span> Generating...';
+            generateKeyBtn.innerHTML = '<span class="loading"></span> ' + framework.translate('Generating...');
 
             try {
                 const result = await apiRequest('/keys/generate', {
@@ -1646,10 +1651,10 @@
                 }
             } catch (error) {
                 console.error('Error generating API key:', error);
-                showToast('Error generating API key: ' + error.message, 'error');
+                showToastFormat('Error generating API key: {0}', 'error', error.message);
             } finally {
                 generateKeyBtn.disabled = false;
-                generateKeyBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Generate New Key';
+                generateKeyBtn.innerHTML = '<i class="fas fa-sync-alt"></i> ' + framework.translate('Generate New Key');
             }
         });
 
@@ -1795,14 +1800,12 @@
                             localStorage.removeItem('HuggingFace-api_key');
                             showToast('HuggingFace token expired, please sign in again', 'error');
                             if (window.oauthConfig) {
-                                localStorage.setItem('huggingface_pending_server', 'true');
                                 window.location.href = await oauthLoginUrl(window.oauthConfig);
                             }
                         }
                     } else {
                         // Redirect to HuggingFace OAuth
                         if (window.oauthConfig) {
-                            localStorage.setItem('huggingface_pending_server', 'true');
                             window.location.href = await oauthLoginUrl(window.oauthConfig);
                         } else {
                             showToast('HuggingFace OAuth not configured', 'error');
@@ -1843,21 +1846,54 @@
             }
             
             // Check for pending HuggingFace server creation
-            const pendingHuggingFace = localStorage.getItem('huggingface_pending_server');
-            if (pendingHuggingFace) {
-                localStorage.removeItem('huggingface_pending_server');
-                const hfApiKey = localStorage.getItem('HuggingFace-api_key');
-                if (hfApiKey) {
-                    // Validate token before creating server
-                    validateHuggingFaceToken(hfApiKey).then(isValid => {
-                        if (isValid) {
-                            createOrUpdateHuggingFaceServer(hfApiKey);
-                        } else {
-                            localStorage.removeItem('HuggingFace-api_key');
-                            showToast('HuggingFace token expired, please try again', 'error');
-                        }
-                    });
-                }
+            const hfApiKey = localStorage.getItem('HuggingFace-api_key');
+            if (hfApiKey) {
+                // Validate token before creating server
+                validateHuggingFaceToken(hfApiKey).then(isValid => {
+                    if (isValid) {
+                        createOrUpdateHuggingFaceServer(hfApiKey);
+                        addHuggingFaceServerBtn.style.display = 'none';
+                    } else {
+                        localStorage.removeItem('HuggingFace-api_key');
+                        showToast('HuggingFace token expired, please try again', 'error');
+                    }
+                });
+            }
+            async function _injectPuter() {
+                return new Promise((resolve, reject) => {
+                    if (typeof window === 'undefined') {
+                        reject(new Error('Puter can only be used in a browser environment'));
+                        return;
+                    }
+                    if (window.puter) {
+                        resolve(puter);
+                        return;
+                    }
+                    var tag = document.createElement('script');
+                    tag.src = "https://js.puter.com/v2/";
+                    tag.onload = () => {
+                        resolve(puter);
+                    }
+                    tag.onerror = reject;
+                    var firstScriptTag = document.getElementsByTagName('script')[0];
+                    firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+                });
+            }
+
+            // Add Puter server button
+            const addPuterServerBtn = document.getElementById('addPuterServerBtn');
+            if (addPuterServerBtn) {
+                addPuterServerBtn.addEventListener('click', async () => {
+                    try {
+                        await (await _injectPuter()).auth.signIn({attempt_temp_user_creation: true}).then((res) => {
+                            console.log('PuterJS signed in:', res);
+                            createOrUpdatePuterServer(res.token);
+                        });
+                    } catch (error) {
+                        console.error('Failed to sign in with PuterJS:', error);
+                        showToastFormat('Failed to sign in with PuterJS: {0}', 'error', error.message);
+                    }
+                });
             }
         }
         
@@ -1867,13 +1903,13 @@
                 const result = await customApiRequest('/servers');
                 const servers = result.servers || [];
                 const existingServer = servers.find(s => 
-                    s.base_url === 'https://gen.pollinations.ai/v1' || 
+                    s.base_url === 'https://pollinations.g4f-dev.workers.dev' || 
                     s.label.toLowerCase().includes('pollinations')
                 );
                 
                 const serverData = {
                     label: 'Pollinations AI',
-                    base_url: 'https://gen.pollinations.ai/v1',
+                    base_url: 'https://pollinations.g4f-dev.workers.dev',
                     api_keys: apiKey,
                     allowed_models: [],
                     is_public: false
@@ -1888,7 +1924,7 @@
                     });
                     
                     if (updateResult.error) {
-                        showToast('Failed to update Pollinations server: ' + updateResult.error, 'error');
+                        showToastFormat('Failed to update Pollinations server: {0}', 'error', updateResult.error);
                     } else {
                         showToast('Pollinations server updated with new API key!');
                         await loadServers();
@@ -1901,7 +1937,7 @@
                     });
                     
                     if (createResult.error) {
-                        showToast('Failed to create Pollinations server: ' + createResult.error, 'error');
+                        showToastFormat('Failed to create Pollinations server: {0}', 'error', createResult.error);
                     } else {
                         showToast('Pollinations server added successfully!');
                         await loadServers();
@@ -1909,7 +1945,7 @@
                 }
             } catch (error) {
                 console.error('Failed to create/update Pollinations server:', error);
-                showToast('Failed to setup Pollinations server: ' + error.message, 'error');
+                showToastFormat('Failed to setup Pollinations server: {0}', 'error', error.message);
             }
         }
         
@@ -1941,7 +1977,7 @@
                     });
                     
                     if (updateResult.error) {
-                        showToast('Failed to update HuggingFace server: ' + updateResult.error, 'error');
+                        showToastFormat('Failed to update HuggingFace server: {0}', 'error', updateResult.error);
                     } else {
                         showToast('HuggingFace server updated with new API key!');
                         await loadServers();
@@ -1954,7 +1990,7 @@
                     });
                     
                     if (createResult.error) {
-                        showToast('Failed to create HuggingFace server: ' + createResult.error, 'error');
+                        showToastFormat('Failed to create HuggingFace server: {0}', 'error', createResult.error);
                     } else {
                         showToast('HuggingFace server added successfully!');
                         await loadServers();
@@ -1962,29 +1998,86 @@
                 }
             } catch (error) {
                 console.error('Failed to create/update HuggingFace server:', error);
-                showToast('Failed to setup HuggingFace server: ' + error.message, 'error');
+                showToastFormat('Failed to setup HuggingFace server: {0}', 'error', error.message);
             }
         }
         
+        async function createOrUpdatePuterServer(authToken) {
+            try {
+                // First, check if a Puter server already exists
+                const result = await customApiRequest('/servers');
+                const servers = result.servers || [];
+                const existingServer = servers.find(s => 
+                    s.base_url === 'https://puter.g4f-dev.workers.dev' || 
+                    s.label.toLowerCase().includes('puter')
+                );
+                                
+                const serverData = {
+                    label: 'Puter',
+                    base_url: 'https://puter.g4f-dev.workers.dev',
+                    api_keys: authToken,
+                    allowed_models: [],
+                    is_public: false
+                };
+                
+                if (existingServer) {
+                    // Update existing server
+                    serverData.server_id = existingServer.id;
+                    const updateResult = await customApiRequest('/servers/update', {
+                        method: 'POST',
+                        body: JSON.stringify(serverData)
+                    });
+                    
+                    if (updateResult.error) {
+                        showToastFormat('Failed to update Puter server: {0}', 'error', updateResult.error);
+                    } else {
+                        showToast('Puter server updated!');
+                        await loadServers();
+                        addPuterServerBtn.style.display = 'none';
+                    }
+                } else {
+                    // Create new server
+                    const createResult = await customApiRequest('/servers/create', {
+                        method: 'POST',
+                        body: JSON.stringify(serverData)
+                    });
+                    
+                    if (createResult.error) {
+                        showToastFormat('Failed to create Puter server: {0}', 'error', createResult.error);
+                    } else {
+                        showToast('Puter server added successfully!');
+                        await loadServers();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to create/update Puter server:', error);
+                showToastFormat('Failed to setup Puter server: {0}', 'error', error.message);
+            }
+        }
+
+        let serversListLoaded = false;
+        
         async function loadServers() {
             if (!serversList) return;
+
+            let servers = []
             
             try {
-                const result = await customApiRequest('/servers');
+                servers = await customApiRequest('/servers');
                 
-                if (result.error) {
+                if (servers.error) {
                     serversList.innerHTML = `<p style="color: var(--danger); text-align: center;">${result.error}</p>`;
                     return;
                 }
                 
-                const servers = result.servers || [];
+                servers = servers.servers || [];
                 
                 if (servers.length === 0) {
                     serversList.innerHTML = `
                         <div class="empty-servers">
                             <i class="fas fa-server"></i>
-                            <p>No servers added yet</p>
-                            <p style="font-size: 0.9rem;">Add your own AI servers to get started</p>
+                            <p>${framework.translate('No servers added yet')}</p>
+                            <p style="font-size: 0.9rem;">${framework.translate('Add your own AI servers to get started')}</p>
                         </div>
                     `;
                     return;
@@ -2008,10 +2101,52 @@
                 serversList.innerHTML = `
                     <div class="empty-servers">
                         <i class="fas fa-server"></i>
-                        <p>No servers added yet</p>
-                        <p style="font-size: 0.9rem;">Add your own AI servers to get started</p>
+                        <p>${framework.translate('No servers added yet')}</p>
+                        <p style="font-size: 0.9rem;">${framework.translate('Add your own AI servers to get started')}</p>
                     </div>
                 `;
+            }
+
+            if (!serversListLoaded) {
+                serversListLoaded = true;
+
+                const existingServer = servers.find(s => 
+                    s.base_url === 'https://puter.g4f-dev.workers.dev' || 
+                    s.label.toLowerCase().includes('puter')
+                );
+
+                // Check for Puter auth and create server if available
+                const puterAuth = localStorage.getItem('puter.auth.token');
+                if (existingServer && puterAuth) {
+                    try {
+                        // Validate Puter auth before creating server
+                        validatePuterAuth(puterAuth).then(isValid => {
+                            if (isValid) {
+                                createOrUpdatePuterServer(puterAuth);
+                                addPuterServerBtn.style.display = 'none';
+                            } else {
+                                showToast('Puter auth invalid or expired, please sign in again', 'error');
+                                localStorage.removeItem('puter.auth.token');
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Error parsing Puter auth for server creation:', e);
+                    }
+                }
+                // Validate Puter auth token by checking user info
+                async function validatePuterAuth(token) {
+                    try {
+                        const response = await fetch('https://api.puter.com/whoami', {
+                            headers: {
+                                'authorization': `Bearer ${token}`,
+                            },
+                        });
+                        return response.ok;
+                    } catch (e) {
+                        console.error('Failed to validate Puter auth:', e);
+                        return false;
+                    }
+                }
             }
         }
         
@@ -2045,21 +2180,21 @@
                     <div class="server-stats">
                         <div class="server-stat">
                             <i class="fas fa-paper-plane"></i>
-                            ${formatNumber(server.usage?.requests || 0)} requests
+                            ${formatNumber(server.usage?.requests || 0)} ${framework.translate('requests')}
                         </div>
                         <div class="server-stat">
                             <i class="fas fa-coins"></i>
-                            ${formatNumber(server.usage?.tokens || 0)} tokens
+                            ${formatNumber(server.usage?.tokens || 0)} ${framework.translate('tokens')}
                         </div>
                         <div class="server-stat">
                             <i class="fas fa-key"></i>
-                            ${server.api_key_count || 0} keys
+                            ${server.api_key_count || 0} ${framework.translate('keys')}
                         </div>
                     </div>
                     ${models.length > 0 ? `
                         <div class="server-models">
                             ${displayModels.map(m => `<span class="model-tag">${escapeHtml(m)}</span>`).join('')}
-                            ${moreCount > 0 ? `<span class="model-tag more">+${moreCount} more</span>` : ''}
+                            ${moreCount > 0 ? `<span class="model-tag more">${framework.translate('+')}${moreCount} ${framework.translate('more')}</span>` : ''}
                         </div>
                     ` : ''}
                 </div>
@@ -2075,7 +2210,7 @@
             
             if (server) {
                 // Edit mode
-                serverModalTitle.textContent = 'Edit Server';
+                serverModalTitle.textContent = framework.translate('Edit Server');
                 editServerId.value = server.id;
                 document.getElementById('serverLabel').value = server.label || '';
                 document.getElementById('serverBaseUrl').value = server.base_url || '';
@@ -2084,7 +2219,7 @@
                 // Note: API keys are not returned for security, user must re-enter
             } else {
                 // Add mode
-                serverModalTitle.textContent = 'Add New Server';
+                serverModalTitle.textContent = framework.translate('Add New Server');
                 editServerId.value = '';
             }
             
@@ -2103,7 +2238,7 @@
             const saveBtn = document.getElementById('saveServerBtn');
             const originalBtnHtml = saveBtn.innerHTML;
             saveBtn.disabled = true;
-            saveBtn.innerHTML = '<span class="loading"></span> Validating...';
+            saveBtn.innerHTML = '<span class="loading"></span> ' + framework.translate('Validating...');
             
             const serverId = editServerId.value;
             const label = document.getElementById('serverLabel').value.trim();
@@ -2153,7 +2288,7 @@
         }
         
         async function deleteServer(serverId) {
-            if (!confirm('Are you sure you want to delete this server? This action cannot be undone.')) {
+            if (!confirm(framework.translate('Are you sure you want to delete this server? This action cannot be undone.'))) {
                 return;
             }
             
@@ -2172,7 +2307,7 @@
                 await loadServers();
                 
             } catch (error) {
-                showToast('Failed to delete server: ' + error.message, 'error');
+                showToastFormat('Failed to delete server: {0}', 'error', error.message);
             }
         }
         
@@ -2244,5 +2379,49 @@
             sessionToken = storedSession;
         }
     </script>
+<template>Successfully signed in with Hugging Face!</template>
+<template>Authentication failed: Invalid token</template>
+<template>Successfully signed in with Pollinations AI!</template>
+<template>Authentication failed: Access denied</template>
+<template>Successfully signed in with Puter!</template>
+<template>Authentication failed: Invalid credentials</template>
+<template>API key generated successfully! Save it now - you won't see it again.</template>
+<template>API key generated successfully!</template>
+<template>Error generating API key: {0}</template>
+<template>No API key to copy</template>
+<template>API key copied to clipboard!</template>
+<template>Base URL copied to clipboard!</template>
+<template>Failed to copy</template>
+<template>HuggingFace token expired, please sign in again</template>
+<template>HuggingFace OAuth not configured</template>
+<template>HuggingFace token expired, please try again</template>
+<template>Failed to setup HuggingFace server: {0}</template>
+<template>Failed to create/update HuggingFace server: {0}</template>
+<template>Pollinations server updated with new API key!</template>
+<template>Pollinations server added successfully!</template>
+<template>Failed to setup Pollinations server: {0}</template>
+<template>Failed to create/update Pollinations server: {0}</template>
+<template>Puter server updated!</template>
+<template>Puter server added successfully!</template>
+<template>Failed to setup Puter server: {0}</template>
+<template>Failed to create/update Puter server: {0}</template>
+<template>No servers added yet</template>
+<template>Add your own AI servers to get started</template>
+<template>Failed to load servers: {0}</template>
+<template>Public</template>
+<template>{0} requests</template>
+<template>{0} tokens</template>
+<template>{0} keys</template>
+<template>Edit Server</template>
+<template>Add New Server</template>
+<template>Are you sure you want to delete this server? This action cannot be undone.</template>
+<template>Server updated successfully!</template>
+<template>Server added successfully!</template>
+<template>Server deleted successfully</template>
+<template>Server endpoint copied to clipboard!</template>
+<template>Failed to copy URL</template>
+<template>Generating...</template>
+<template>Failed to delete server: {0}</template>
+<template>Validating...</template>
 </body>
 </html>

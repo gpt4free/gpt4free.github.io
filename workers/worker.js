@@ -12,8 +12,8 @@ const RATE_LIMITS = {
   // Token limits
   tokens: {
     perMinute: 100000,
-    perHour: 200000,
-    perDay: 2000000
+    perHour: 300000,
+    perDay: 500000
   },
   // Request limits
   requests: {
@@ -33,6 +33,10 @@ const RATE_LIMITS = {
 
 // Rate limits for authenticated user tiers
 const USER_TIER_LIMITS = {
+  new: {
+    tokens: { perMinute: 100000, perHour: 300000, perDay: 500000 },
+    requests: { perMinute: 10, perHour: 100, perDay: 1000 }
+  },
   free: {
     tokens: { perMinute: 150000, perHour: 500000, perDay: 1000000 },
     requests: { perMinute: 20, perHour: 200, perDay: 2000 }
@@ -70,21 +74,11 @@ async function handleRequest(request, env, ctx) {
     "openrouter": {url: "https://openrouter.ai/api/v1", api_key: env.OPENROUTER_API_KEY, model: "openai/gpt-oss-120b:free"},
     "deepinfra": {url: "https://api.deepinfra.com/v1/openai", model: "deepseek-ai/DeepSeek-V3.1-Terminus"},
     "groq": {url: "https://api.groq.com/openai/v1", api_key: env.GROQ_API_KEY, model: "moonshotai/kimi-k2-instruct-0905"},
-    "ollama": {endpoint: "https://ollama.com/api/chat", api_key: env.OLLAMA_API_KEY, model: "deepseek-v3.1:671b"},
+    "ollama": {url: "https://ollama.g4f-dev.workers.dev", api_key: env.OLLAMA_API_KEY, model: "deepseek-v3.1:671b"},
     "azure": {endpoint: "https://g4f-dev-resource.cognitiveservices.azure.com/openai/deployments/model-router/chat/completions?api-version=2025-01-01-preview", api_key: env.AZURE_API_KEY, model: "model-router"},
     "auto": {endpoint: "https://g4f-dev-resource.cognitiveservices.azure.com/openai/deployments/model-router/chat/completions?api-version=2025-01-01-preview", api_key: env.AZURE_API_KEY, model: "model-router"},
-    "grok": {url: "https://api.x.ai/v1", api_key: env.GROK_API_KEY, model: "grok-4-fast-non-reasoning"},
-    "x.ai": {url: "https://api.x.ai/v1", api_key: env.GROK_API_KEY, model: "grok-4-fast-non-reasoning"},
-    "gemini": {url: "https://generativelanguage.googleapis.com/v1beta/openai", api_key: env.GEMINI_API_KEY, model: "gemini-2.5-flash-lite"},
-    "typegpt": {url: "https://typegpt.net/api/v1", api_key: env.TYPEGPT_API_KEY, model: "deepseek-ai/DeepSeek-V3.2-Exp"},
-    "pollinations": {endpoint: "https://text.pollinations.ai/openai?referrer=https://g4f.dev/", model: "openai"},
-    "pollinations.ai": {endpoint: "https://text.pollinations.ai/openai?referrer=https://g4f.dev/", model: "openai"},
-    //"stringable-inf": {url: "https://stringableinf.com/api", endpoint: "https://stringableinf.com/api/v1/chat/completions", extraHeaders: {"HTTP-Referer": "https://g4f.dev/", "X-Title": "G4F API"}, model: "gpt-oss-120b"},
-    "api.airforce": {url: "https://api.airforce/v1", model: "deepseek-v3.2", api_key: env.API_AIRFORCE_API_KEY},
-    "gpt4free.pro": {url: "https://gpt4free.pro/v1", model: "deepseek-v3.2"},
+    "pollinations": {endpoint: "https://text.pollinations.ai/openai", model: "openai"},
     "nectar": {url: "https://gen.pollinations.ai", endpoint: "https://gen.pollinations.ai/v1/chat/completions", api_key: env.POLLINATIONS_API_KEY, model: "openai"},
-    "audio": {endpoint: "https://g4f-dev-resource.cognitiveservices.azure.com/openai/deployments/gpt-audio/chat/completions?api-version=2025-01-01-preview", api_key: env.AZURE_API_KEY, model: "gpt-audio"},
-    "huggingface": {url: "https://pass.g4f.dev/api/HuggingFace", extraHeaders: {"g4f-api-key": "_g4f"}},
   }
   const ALLOW_LIST = ["openrouter", "nvidia", "groq", "ollama", "azure", "nectar", "pollinations"];
 
@@ -194,7 +188,9 @@ async function handleRequest(request, env, ctx) {
 
   // Authenticated user info - set during rate limit check, used for usage tracking
   let authenticatedUser = null;
-
+  if (pathname.startsWith("/v1/")|| pathname.startsWith("/backend-api/")) {
+    authenticatedUser = await validateUserApiKey(request, env);
+  }
   // Check token usage limit for AI endpoints
   if (pathname.startsWith("/ai/") || pathname.startsWith("/api/") && pathname.endsWith("/chat/completions")) {
     // First, check if user has a valid API key for higher limits
@@ -269,7 +265,7 @@ async function handleRequest(request, env, ctx) {
     if (authHeader && authHeader !== 'Bearer secret') {
       // Handle space-separated keys (e.g., "Bearer g4f_xxx provider_key") - extract non-g4f key
       const tokens = authHeader.replace(/^Bearer\s+/i, '').split(/\s+/);
-      const providerKey = tokens.find(t => t && !t.startsWith('g4f_'));
+      const providerKey = tokens.find(t => t && !t.startsWith('g4f_') && !t.startsWith('gfs_'));
       if (providerKey) {
         authorizationHeader = `Bearer ${providerKey}`;
       }
@@ -307,11 +303,7 @@ async function handleRequest(request, env, ctx) {
       queryBody.model = url.searchParams.get("model") || modelConfig?.model;
     }
     if (url.searchParams.get("json") === "true") {
-      if (provider === "ollama") {
-        queryBody.format = "json";
-      } else {
-        queryBody.response_format = {"type": "json_object"};
-      }
+      queryBody.response_format = {"type": "json_object"};
     }
     if (provider === "audio") {
       queryBody.audio = {
@@ -354,6 +346,7 @@ async function handleRequest(request, env, ctx) {
         ...(modelConfig.extraHeaders ? modelConfig.extraHeaders : {})
       }});
       if (!response.ok || queryBody.stream) {
+        response.headers.set("x-tier", authenticatedUser ? authenticatedUser.tier : "anonymous");
         response.headers.set("x-provider", provider);
         response.headers.set("x-url", queryUrl);
         // Track usage for streaming responses
@@ -364,6 +357,7 @@ async function handleRequest(request, env, ctx) {
           const newResponse = new Response(trackedStream, {
             headers: response.headers
           });
+          newResponse.headers.set("x-tier", authenticatedUser ? authenticatedUser.tier : "anonymous");
           newResponse.headers.set("x-provider", provider);
           newResponse.headers.set("x-url", queryUrl);
           return newResponse;
@@ -406,7 +400,9 @@ async function handleRequest(request, env, ctx) {
     const headers = {
       ...ACCESS_CONTROL_ALLOW_ORIGIN,
       "content-type": "text/plain; charset=UTF-8",
-      "x-provider": provider
+      "x-provider": provider,
+      "x-url": queryUrl,
+      "x-tier": authenticatedUser ? authenticatedUser.tier : "anonymous"
     };
     const newResponse = new Response(data, {headers});
     if (["HEAD", "GET"].includes(request.method)) {
@@ -432,6 +428,16 @@ async function handleRequest(request, env, ctx) {
   } else if (pathname.startsWith("/prompt/")) {
     return retrieveCache(request, liteRequest, pathname + search, ctx, `image.${POLLINATIONS_HOST}`, CACHE_FOREVER);
   } else {
+    const authHeader = request.headers.get('authorization');
+    let authorizationHeader = null;
+    if (authHeader && authHeader !== 'Bearer secret') {
+      // Handle space-separated keys (e.g., "Bearer g4f_xxx provider_key") - extract non-g4f key
+      const tokens = authHeader.replace(/^Bearer\s+/i, '').split(/\s+/);
+      const providerKey = tokens.find(t => t && !t.startsWith('g4f_') && !t.startsWith('gfs_'));
+      if (providerKey) {
+        authorizationHeader = `Bearer ${providerKey}`;
+      }
+    }
     for (const provider in models){
         let subpath = `/api/${provider}`;
         if (pathname.startsWith(subpath)) {
@@ -440,19 +446,9 @@ async function handleRequest(request, env, ctx) {
           }
           const apiKeys = models[provider].api_key ? models[provider].api_key.split("\n") : null;
           const selectedApiKey = apiKeys ? apiKeys[apiKeys.length * Math.random() << 0] : null;
-          const authHeader = request.headers.get('authorization');
-          let authorizationHeader = null;
-          if (authHeader && authHeader !== 'Bearer secret') {
-            // Handle space-separated keys (e.g., "Bearer g4f_xxx provider_key") - extract non-g4f key
-            const tokens = authHeader.replace(/^Bearer\s+/i, '').split(/\s+/);
-            const providerKey = tokens.find(t => t && !t.startsWith('g4f_'));
-            if (providerKey) {
-              authorizationHeader = `Bearer ${providerKey}`;
-            }
-          }
           const newRequest = new Request(request, {
             headers: {
-              'authorization': authorizationHeader || selectedApiKey ? `Bearer ${selectedApiKey}` : null,
+              'authorization': authorizationHeader || (selectedApiKey ? `Bearer ${selectedApiKey}` : null),
               'content-type': request.headers.get("content-type"),
               'user-agent': request.headers.get("user-agent"),
               'referer': request.headers.get("referer")
@@ -478,7 +474,7 @@ async function handleRequest(request, env, ctx) {
             }
           } else {
             const trackUsage = pathname.endsWith('/chat/completions') ? { env, ctx, clientIP: getClientIP(request), provider, model: null, pathname } : null;
-            response = await forwardApi(newRequest, newUrl, null, null, CACHE_CONTROL, trackUsage);
+            response = await forwardApi(newRequest, newUrl, null, null, CACHE_CONTROL, trackUsage, {}, authenticatedUser);
           }
           return response;
         }
@@ -486,7 +482,7 @@ async function handleRequest(request, env, ctx) {
     if (pathname.startsWith("/api/") || pathname.startsWith("/v1/")|| pathname.startsWith("/backend-api/") || pathname == "/openapi.json") {
       const provider = pathname.startsWith("/api/") ? pathname.split("/")[2] : "";
       const trackUsage = { env, ctx, clientIP: getClientIP(request), provider: provider, pathname };
-      return forwardApi(request, `https://${API_HOST}${pathWithParams}`, liteRequest, ctx, CACHE_CONTROL, trackUsage);
+      return forwardApi(request, `https://${API_HOST}${pathWithParams}`, liteRequest, ctx, CACHE_CONTROL, trackUsage, {'authorization': authorizationHeader, "g4f-api-key": "_g4f"}, authenticatedUser);
     } else {
       return fetch(`https://${GITHUB_HOST}${pathname}`, request);
       if (["HEAD", "GET"].includes(request.method) && response.status == 404 && pathname.startsWith("/docs/")) {
@@ -523,7 +519,7 @@ async function retrieveCache(request, liteRequest, pathname, ctx, host, cache_co
     return newResponse;
 }
 
-async function forwardApi(request, newUrl, liteRequest=null, ctx=null, cache_control = CACHE_CONTROL, trackUsage = null) {
+async function forwardApi(request, newUrl, liteRequest=null, ctx=null, cache_control = CACHE_CONTROL, trackUsage = null, extraHeaders = {}, userInfo) {
   let modifiedRequest = request;
   
   // For chat completions, inject stream_options to get usage in streaming responses
@@ -536,7 +532,7 @@ async function forwardApi(request, newUrl, liteRequest=null, ctx=null, cache_con
       firstMessage = getFirstMessage(body.messages);
       if (body.stream) {
         body.stream_options = { include_usage: true };
-        modifiedRequest = new Request(request, {
+        modifiedRequest = new Request(modifiedRequest, {
           body: JSON.stringify(body)
         });
       }
@@ -544,19 +540,31 @@ async function forwardApi(request, newUrl, liteRequest=null, ctx=null, cache_con
       // Ignore JSON parse errors, proceed with original request
     }
   }
-  const response = await shield(newUrl, modifiedRequest);
+  const newRequest = new Request(modifiedRequest, {
+    headers: {
+      'authorization': request.headers.get("authorization"),
+      'content-type': request.headers.get("content-type"),
+      'user-agent': request.headers.get("user-agent"),
+      'referer': request.headers.get("referer"),
+      'x_secret': request.headers.get('x_secret'),
+      'x-ignnored': request.headers.get('x-ignnored'),
+      ...extraHeaders
+    }
+  });
+  const response = await shield(newUrl, newRequest);
   // Track token usage for chat completions
   if (trackUsage && response.ok) {
     const contentType = response.headers.get('content-type') || '';
     // Handle streaming responses (text/event-stream)
     if (contentType.includes('text/event-stream')) {
-      const trackedStream = createUsageTrackingStream(response, trackUsage.env, trackUsage.clientIP, trackUsage.ctx, trackUsage.provider, requestModel, trackUsage.pathname, firstMessage);
+      const trackedStream = createUsageTrackingStream(response, trackUsage.env, trackUsage.clientIP, trackUsage.ctx, trackUsage.provider, requestModel, trackUsage.pathname, firstMessage, userInfo);
       const newResponse = new Response(trackedStream, {
         headers: response.headers
       });
       for (const [key, value] of Object.entries(ACCESS_CONTROL_ALLOW_ORIGIN)) {
         newResponse.headers.set(key, value);
       }
+      newResponse.headers.set("x-tier", userInfo ? userInfo.tier : "anonymous");
       return newResponse;
     }
     
@@ -567,7 +575,7 @@ async function forwardApi(request, newUrl, liteRequest=null, ctx=null, cache_con
         const data = await clonedResponse.json();
         const usage = extractDetailedUsage(data);
         if (usage.total > 0) {
-          await updateTokenUsage(trackUsage.env, trackUsage.clientIP, usage.total, trackUsage.ctx, trackUsage.provider || data.provider, data.model || requestModel, usage.prompt, usage.completion, trackUsage.pathname, firstMessage, authenticatedUser);
+          await updateTokenUsage(trackUsage.env, trackUsage.clientIP, usage.total, trackUsage.ctx, trackUsage.provider || data.provider, data.model || requestModel, usage.prompt, usage.completion, trackUsage.pathname, firstMessage, userInfo);
         }
       } catch (e) {
         // Ignore JSON parse errors
@@ -575,7 +583,7 @@ async function forwardApi(request, newUrl, liteRequest=null, ctx=null, cache_con
     }
   }
   
-  const newResponse = new Response(response.body, {headers: response.headers});
+  const newResponse = new Response(response.body, {status: response.status, headers: response.headers});
   for (const [key, value] of Object.entries(ACCESS_CONTROL_ALLOW_ORIGIN)) {
     newResponse.headers.set(key, value);
   }
@@ -660,7 +668,7 @@ async function shield(url, options) {
   const response = await fetch(url, options);
   const contentType = (response.headers.get("content-type") || "").split(";")[0];
   if (!contentType || !["text/event-stream", "application/json", "text/plain", "application/problem+json", "audio/vnd.wav", "audio/mpeg"].includes(contentType)) {
-    return Response.json({error: {message: `Shield: Status: ${response.status}, Content-Type: '${contentType}', User-Agent: '${options.headers.get('user-agent')}'`}}, {status: 500, headers: {"x-provider": response.headers.get("x-provider"), "x-url": url, ...ACCESS_CONTROL_ALLOW_ORIGIN}});
+    return Response.json({error: {message: `Shield: Status: ${response.status}, Content-Type: '${contentType}'`}}, {status: 500, headers: {"x-provider": response.headers.get("x-provider"), "x-url": url, ...ACCESS_CONTROL_ALLOW_ORIGIN}});
   }
   if (!response.ok && contentType.startsWith("application/json")) {
     const responseData = await response.json();
@@ -726,7 +734,7 @@ function getFirstMessage(messages, fallback = '') {
   // Find first non-empty content, preferring user messages
   for (const msg of messages) {
     const content = typeof msg.content === 'string' ? msg.content.replace(/^[\s.]+|[\s.]+$/g, '') : '';
-    if (content && !content.startsWith('Today is:') && !content.startsWith('[SYSTEM]:')) {
+    if (content && !content.startsWith('Today is:') && !content.startsWith('[SYSTEM]:') && content.length > 2) {
       return content;
     }
   }
@@ -894,23 +902,20 @@ function createUsageTrackingStream(response, env, clientIP, ctx, provider = null
   const stream = new ReadableStream({
     async pull(controller) {
       const { done, value } = await reader.read();
-      
-      if (done) {
-        // Process any remaining buffer for usage data
-        if (buffer) {
-          extractUsageFromBuffer(buffer, env, clientIP, ctx, provider, model, pathname, firstMessage, userInfo);
-        }
-        controller.close();
-        return;
+      let lines;
+      if (!done) {
+        const text = decoder.decode(value, { stream: true });
+        buffer += text;
+        
+        // Look for usage in SSE data chunks
+        lines = buffer.split('\n');
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop() || '';
+      } else {
+        lines = buffer.split('\n');
       }
-      
-      const text = decoder.decode(value, { stream: true });
-      buffer += text;
-      
-      // Look for usage in SSE data chunks
-      const lines = buffer.split('\n');
-      // Keep the last incomplete line in buffer
-      buffer = lines.pop() || '';
+
+      let lastData = null;
       
       for (const line of lines) {
         if (line.startsWith('data: ') && line !== 'data: [DONE]') {
@@ -918,27 +923,23 @@ function createUsageTrackingStream(response, env, clientIP, ctx, provider = null
             const jsonStr = line.slice(6);
             const data = JSON.parse(jsonStr);
             if (data.usage) {
-              const usage = extractDetailedUsage(data);
-              if (usage.total > 0) {
-                ctx.waitUntil(updateTokenUsage(env, clientIP, usage.total, ctx, provider || data.provider, data.model || model, usage.prompt, usage.completion, pathname, firstMessage, userInfo));
-              }
+              lastData = data;
             }
           } catch (e) {
             // Ignore parse errors for incomplete chunks
           }
-        } else if ((response.headers.get("content-type") || "").includes("application/json")) {
-          try {
-            const data = JSON.parse(line);
-            if (data.eval_count) {
-              ctx.waitUntil(updateTokenUsage(env, clientIP, data.prompt_eval_count + data.eval_count, ctx, provider || data.provider, data.model || model, data.prompt_eval_count, data.eval_count, pathname, firstMessage, userInfo));
-            }
-          } catch(e) {
-            
-          }
         }
       }
-      
-      controller.enqueue(value);
+      if (done) {
+        controller.close();
+        const usage = extractDetailedUsage(lastData);
+        if (usage.total > 0) {
+          ctx.waitUntil(updateTokenUsage(env, clientIP, usage.total, ctx, provider || lastData.provider, lastData.model || model, usage.prompt, usage.completion, pathname, firstMessage, userInfo));
+        }
+        return;
+      } else {
+        controller.enqueue(value);
+      }
     },
     cancel() {
       reader.cancel();
@@ -946,26 +947,6 @@ function createUsageTrackingStream(response, env, clientIP, ctx, provider = null
   });
   
   return stream;
-}
-
-function extractUsageFromBuffer(buffer, env, clientIP, ctx, provider = null, model = null, pathname = null, firstMessage = null, userInfo = null) {
-  const lines = buffer.split('\n');
-  for (const line of lines) {
-    if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-      try {
-        const jsonStr = line.slice(6);
-        const data = JSON.parse(jsonStr);
-        if (data.usage) {
-          const usage = extractDetailedUsage(data);
-          if (usage.total > 0) {
-            ctx.waitUntil(updateTokenUsage(env, clientIP, usage.total, ctx, provider || data.provider, data.model || model, usage.prompt, usage.completion, pathname, firstMessage, userInfo));
-          }
-        }
-      } catch (e) {
-        // Ignore parse errors
-      }
-    }
-  }
 }
 
 // Persist usage to D1 database
@@ -1040,12 +1021,12 @@ async function validateUserApiKey(request, env) {
   // Get API key from Authorization header or X-API-Key header
   const authHeader = request.headers.get('Authorization');
   const xApiKey = request.headers.get('X-API-Key');
-  
+
   let apiKey = null;
   let sessionToken = null;
   
   // Check Authorization header for g4f_ API key
-  if (authHeader && authHeader.startsWith('Bearer ') && authHeader !== 'Bearer secret') {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
     const tokens = authHeader.substring(7).split(/\s+/);
     const g4fKey = tokens.find(t => t.startsWith('g4f_'));
     if (g4fKey) {
@@ -1063,6 +1044,13 @@ async function validateUserApiKey(request, env) {
     const cookies = parseCookies(request);
     if (cookies.g4f_session) {
       sessionToken = cookies.g4f_session;
+    }
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const tokens = authHeader.substring(7).split(/\s+/);
+      const findToken = tokens.find(t => t.startsWith('gfs_'));
+      if (findToken) {
+        sessionToken = findToken;
+      }
     }
   }
   
@@ -1086,7 +1074,8 @@ async function validateUserApiKey(request, env) {
       return {
         user_id: keyData.user_id,
         key_id: keyData.key_id,
-        tier: keyData.tier || 'free',
+        tier: keyData.tier || 'new',
+        username: keyData.username || null,
         api_key_hash: keyHash,
         auth_method: 'api_key'
       };
@@ -1115,11 +1104,17 @@ async function validateUserApiKey(request, env) {
       if (sessionData.expires_at && new Date(sessionData.expires_at) < new Date()) {
         return null;
       }
+
+      const userData = await getUser(env, sessionData.user_id);
+      if (!userData) {
+        return null;
+      }
       
       return {
         user_id: sessionData.user_id,
         key_id: null,
-        tier: sessionData.tier || 'free',
+        tier: userData.tier || 'new',
+        username: userData.username || null,
         api_key_hash: null,
         auth_method: 'session'
       };
@@ -1156,6 +1151,27 @@ function getRateLimitsForTier(tier) {
     };
   }
   return RATE_LIMITS;
+}
+
+async function getUser(env, userId) {
+  // Try KV cache first
+  const cached = await env.MEMBERS_KV.get(`user:${userId}`);
+  if (cached) {
+      return JSON.parse(cached);
+  }
+
+  // Fall back to R2
+  const object = await env.MEMBERS_BUCKET.get(`users/${userId}.json`);
+  if (!object) {
+      return null;
+  }
+
+  const user = await object.json();
+  
+  // Cache for next time
+  await env.MEMBERS_KV.put(`user:${userId}`, JSON.stringify(user), { expirationTtl: 3600 });
+  
+  return user;
 }
 
 /**

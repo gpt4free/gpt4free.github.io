@@ -1,5 +1,6 @@
 const G4F_HOST = "https://g4f.dev";
 const G4F_WILDCARD = ".g4f.dev";
+const G4F_HOST_PASS = "https://pass.g4f.dev";
 const DB_NAME = 'chat-db';
 const STORE_NAME = 'conversations';
 const VERSION = 1;
@@ -49,7 +50,7 @@ if (window.location.protocol === "file:") {
 if (["https:", "http:"].includes(window.location.protocol)) {
     checkUrls.push(window.location.origin);
 }
-checkUrls.push(G4F_HOST);
+checkUrls.push(G4F_HOST_PASS);
 async function checkUrl(url, connectStatus) {
     let response;
     try {
@@ -94,6 +95,9 @@ framework.translate = (text) => {
     }
     return text;
 };
+function countWords(text) {
+    return text.trim().match(/[\w\u4E00-\u9FA5]+/gu)?.length || 0;
+}
 framework.translationKey = "translations" + document.location.pathname;
 framework.translations = JSON.parse(localStorage.getItem(framework.translationKey) || "{}");
 framework.translateElements = function (elements = null) {
@@ -111,7 +115,9 @@ framework.translateElements = function (elements = null) {
         } 
         for (const child of element.childNodes) {
             if (child.nodeType === Node.TEXT_NODE) {
-                child.textContent = framework.translate(child.textContent);
+                if (countWords(child.textContent) > 0) {
+                    child.textContent = framework.translate(child.textContent);
+                }
             }
         }
         if (element.alt) {
@@ -180,20 +186,31 @@ async function query(prompt, options={ json: false, cache: true }) {
         options = { json: options, cache: true };
     }
     let encodedParams = (new URLSearchParams(options)).toString();
-    let secondPartyUrl = `https://g4f.dev/ai/${encodeURIComponent(prompt)}${encodedParams ? "?" + encodedParams : ""}`;
-    let response = await fetch(secondPartyUrl);
-    if (!response.ok) {
+    let secondPartyUrl = `https://g4f.dev/ai/auto/${encodeURIComponent(prompt)}${encodedParams ? "?" + encodedParams : ""}`;
+    let response;
+    try {
+        response = await fetch(secondPartyUrl, { headers: localStorage.getItem("session_token") ? {
+            'Authorization': `Bearer ${localStorage.getItem("session_token")}`
+        } : {}});
+        window.captureUserTierHeaders?.(response.headers);
+    } catch (e) {
+        add_error(`Error fetching URL: \`${secondPartyUrl}\``, e);
+    }
+    if (!response || !response.ok) {
         const delay = parseInt(response.headers.get('Retry-After'), 10);
-        if (delay > 0) {
+        if (delay > 0 && delay <= 60) {
             console.log(`Retrying after ${delay} seconds...`);
             await new Promise(resolve => setTimeout(resolve, delay * 1000));
-            response = await fetch(secondPartyUrl);
+            response = await fetch(secondPartyUrl, { headers: localStorage.getItem("session_token") ? {
+                'Authorization': `Bearer ${localStorage.getItem("session_token")}`
+            } : {}});
+            window.captureUserTierHeaders?.(response.headers);
         }
     }
     if (!response.ok) {
         add_error(`Error ${response.status} with URL: \`${secondPartyUrl}\`\n ${await response.text()}`, true);
-        let firstPartyUrl = `https://text.pollinations.ai/${encodeURIComponent(prompt)}${encodedParams ? "?" + encodedParams : ""}`;
-        response = await fetch(firstPartyUrl);
+        let firstPartyUrl = `https://gen.pollinations.ai/text/${encodeURIComponent(prompt)}${encodedParams ? "?" + encodedParams : ""}`;
+        response = await fetch(firstPartyUrl, { headers: {"Authorization": `Bearer ${["pk", "_B9YJX5SBohhm2ePq"].join("")}`}});
         if (!response.ok) {
             add_error(`Error ${response.status} with URL: \`${firstPartyUrl}\`\n ${await response.text()}`, true);
             return;

@@ -46,28 +46,39 @@ const PRO_EMAILS = [
 
 // Rate limits for different user tiers (tokens and requests per window)
 const USER_TIER_LIMITS = {
-  free: {
-    tokens: { perMinute: 150000, perHour: 500000, perDay: 1000000 },
-    requests: { perMinute: 20, perHour: 200, perDay: 2000 },
-    api_keys: 1,
-    burstMultiplier: 2
-  },
-  sponsor: {
-    tokens: { perMinute: 500000, perHour: 2500000, perDay: 10000000 },
-    requests: { perMinute: 50, perHour: 500, perDay: 5000 },
-    api_keys: 5,
-    burstMultiplier: 1.5
-  },
-  pro: {
-    tokens: { perMinute: 1000000, perHour: 5000000, perDay: 20000000 },
-    requests: { perMinute: 100, perHour: 1000, perDay: 10000 },
-    api_keys: 10,
-    burstMultiplier: 1.5
-  }
+    new: {
+        tokens: { perMinute: 20000, perHour: 50000, perDay: 100000 },
+        requests: { perMinute: 5, perHour: 20, perDay: 50 },
+        api_keys: 1,
+        burstMultiplier: 1.2
+    },
+    free: {
+        tokens: { perMinute: 150000, perHour: 500000, perDay: 1000000 },
+        requests: { perMinute: 20, perHour: 200, perDay: 2000 },
+        api_keys: 1,
+        burstMultiplier: 2
+    },
+    sponsor: {
+        tokens: { perMinute: 500000, perHour: 2500000, perDay: 10000000 },
+        requests: { perMinute: 50, perHour: 500, perDay: 5000 },
+        api_keys: 5,
+        burstMultiplier: 1.5
+    },
+    pro: {
+        tokens: { perMinute: 1000000, perHour: 5000000, perDay: 20000000 },
+        requests: { perMinute: 100, perHour: 1000, perDay: 10000 },
+        api_keys: 10,
+        burstMultiplier: 1.5
+    }
 };
 
 // Legacy USER_TIERS for backwards compatibility
 const USER_TIERS = {
+  new: {
+      requests_per_day: USER_TIER_LIMITS.new.requests.perDay,
+      tokens_per_day: USER_TIER_LIMITS.new.tokens.perDay,
+      api_keys: USER_TIER_LIMITS.new.api_keys
+  },
   free: {
       requests_per_day: USER_TIER_LIMITS.free.requests.perDay,
       tokens_per_day: USER_TIER_LIMITS.free.tokens.perDay,
@@ -522,6 +533,7 @@ async function createOrUpdateUser(env, userData) {
   const now = new Date().toISOString();
   let user;
 
+
   if (userId) {
       // Update existing user
       user = await getUser(env, userId);
@@ -537,6 +549,14 @@ async function createOrUpdateUser(env, userData) {
           if (userData.email && PRO_EMAILS.includes(userData.email.toLowerCase())) {
               user.tier = "pro";
           }
+          // Auto-upgrade 'new' users to 'free' after 1 day
+          if (user.tier === "new" && user.created_at) {
+              const created = new Date(user.created_at);
+              const nowDate = new Date(now);
+              if ((nowDate - created) > 24 * 60 * 60 * 1000) {
+                  user.tier = "free";
+              }
+          }
       }
   }
 
@@ -544,7 +564,7 @@ async function createOrUpdateUser(env, userData) {
       // Create new user
       userId = generateUserId();
       // Determine tier based on email
-      let tier = "free";
+      let tier = "new";
       if (userData.email && PRO_EMAILS.includes(userData.email.toLowerCase())) {
           tier = "pro";
       }
@@ -722,7 +742,7 @@ async function handleGenerateApiKey(request, env, ctx) {
       return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
-  const tierLimits = USER_TIERS[user.tier] || USER_TIERS.free;
+  const tierLimits = USER_TIERS[user.tier] || USER_TIERS.new;
   let revokedKey = null;
 
   // Automatically revoke oldest API key if at limit
@@ -790,7 +810,8 @@ async function handleGenerateApiKey(request, env, ctx) {
   await env.MEMBERS_KV.put(`api_key:${keyHash}`, JSON.stringify({
       user_id: user.id,
       key_id: keyData.id,
-      tier: user.tier
+      tier: user.tier,
+      username: user.username
   }));
 
   // Add to user's API keys
@@ -912,7 +933,8 @@ async function handleValidateApiKey(request, env) {
       valid: true,
       user_id: user.id,
       tier: user.tier,
-      limits: USER_TIERS[user.tier] || USER_TIERS.free
+      username: user.username,
+      limits: USER_TIERS[user.tier] || USER_TIERS.new
   });
 }
 
@@ -938,7 +960,7 @@ async function handleGetUsage(request, env) {
       await saveUser(env, user);
   }
 
-  const tierLimits = USER_TIERS[user.tier] || USER_TIERS.free;
+  const tierLimits = USER_TIERS[user.tier] || USER_TIERS.new;
 
   return jsonResponse({
       usage: {
@@ -1018,7 +1040,7 @@ async function handleTrackUsage(request, env, ctx) {
   }
 
   const body = await request.json();
-  const { requests = 1, tokens = 0, provider = null, model = null } = body;
+  const { requests = 1, tokens = 0, provider = null, model = null, username = null } = body;
 
   // Update user usage
   user.usage.requests_today += requests;
@@ -1056,7 +1078,7 @@ async function updateDailyUsage(env, userId, dateKey, requests, tokens, provider
           requests: 0,
           tokens: 0,
           providers: {},
-          models: {}
+          models: {},
       };
   }
 
@@ -1081,6 +1103,7 @@ async function updateDailyUsage(env, userId, dateKey, requests, tokens, provider
 
 async function createSession(env, userId) {
   const sessionToken = generateSessionToken();
+  const user = await getUser(env, userId);
   const sessionData = {
       user_id: userId,
       created_at: new Date().toISOString(),
@@ -1245,7 +1268,7 @@ function generateKeyId() {
 function generateSessionToken() {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, "0")).join("");
+  return "gfs_" + Array.from(array, byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 async function generateApiKey(env, userId) {
@@ -1409,7 +1432,7 @@ async function redirectWithTempApiKey(env, user, externalRedirectUrl) {
  * Get rate limits configuration for a user tier
  */
 function getRateLimitsForTier(tier) {
-    const tierLimits = USER_TIER_LIMITS[tier] || USER_TIER_LIMITS.free;
+    const tierLimits = USER_TIER_LIMITS[tier] || USER_TIER_LIMITS.new;
     return {
         tokens: tierLimits.tokens,
         requests: tierLimits.requests,
@@ -1565,7 +1588,7 @@ async function handleGetRateLimit(request, env) {
         return jsonResponse({ error: "Unauthorized" }, 401);
     }
 
-    const tier = user.tier || 'free';
+    const tier = user.tier || 'new';
     const limits = getRateLimitsForTier(tier);
     const usage = await getUserRateLimitUsage(env, user.id);
     const now = Date.now();
@@ -1625,7 +1648,7 @@ async function handleCheckRateLimit(request, env) {
         if (keyDataStr) {
             const keyData = JSON.parse(keyDataStr);
             userId = keyData.user_id;
-            tier = keyData.tier || 'free';
+            tier = keyData.tier || 'new';
         }
     }
 
@@ -1634,7 +1657,7 @@ async function handleCheckRateLimit(request, env) {
         const user = await authenticateRequest(request, env);
         if (user) {
             userId = user.id;
-            tier = user.tier || 'free';
+            tier = user.tier || 'new';
         }
     }
 
@@ -1693,7 +1716,7 @@ async function handleUpdateRateLimit(request, env, ctx) {
         if (keyDataStr) {
             const keyData = JSON.parse(keyDataStr);
             userId = keyData.user_id;
-            tier = keyData.tier || 'free';
+            tier = keyData.tier || 'new';
         }
     }
 
@@ -1701,7 +1724,7 @@ async function handleUpdateRateLimit(request, env, ctx) {
         const user = await authenticateRequest(request, env);
         if (user) {
             userId = user.id;
-            tier = user.tier || 'free';
+            tier = user.tier || 'new';
         }
     }
 
@@ -1770,7 +1793,7 @@ async function validateApiKeyWithRateLimits(env, apiKey) {
 
     try {
         const keyData = JSON.parse(keyDataStr);
-        const tier = keyData.tier || 'free';
+        const tier = keyData.tier || 'new';
         const rateCheck = await checkUserRateLimits(env, keyData.user_id, tier);
 
         return {
