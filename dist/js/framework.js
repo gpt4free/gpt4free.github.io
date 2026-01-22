@@ -1,6 +1,6 @@
 const G4F_HOST = "https://g4f.dev";
 const G4F_WILDCARD = ".g4f.dev";
-const G4F_HOST_PASS = "https://pass.g4f.dev";
+const G4F_HOST_PASS = "https://hurricane-toddler-sharing-mpg.trycloudflare.com";
 const DB_NAME = 'chat-db';
 const STORE_NAME = 'conversations';
 const VERSION = 1;
@@ -186,7 +186,7 @@ async function query(prompt, options={ json: false, cache: true }) {
         options = { json: options, cache: true };
     }
     let encodedParams = (new URLSearchParams(options)).toString();
-    let secondPartyUrl = `https://g4f.dev/ai/auto/${encodeURIComponent(prompt)}${encodedParams ? "?" + encodedParams : ""}`;
+    let secondPartyUrl = `https://api.gpt4free.workers.dev/ai/auto/${encodeURIComponent(prompt)}${encodedParams ? "?" + encodedParams : ""}`;
     let response;
     try {
         response = await fetch(secondPartyUrl, { headers: localStorage.getItem("session_token") ? {

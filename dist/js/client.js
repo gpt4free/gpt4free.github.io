@@ -113,8 +113,8 @@ const toBase64 = file => new Promise((resolve, reject) => {
 class Client {
     constructor(options = {}) {
         if (!options.baseUrl && !options.apiEndpoint) {
-            options.baseUrl = "https://g4f.dev/api/auto";
-            options.apiEndpoint = "https://g4f.dev/ai/";
+            options.baseUrl = "https://api.gpt4free.workers.dev/api/auto";
+            options.apiEndpoint = "https://api.gpt4free.workers.dev/ai/";
             options.sleep = 10000;
         }
         this.proxyManager = new CorsProxyManager();
@@ -556,9 +556,9 @@ class PollinationsAI extends Client {
                 const userInfo = {
                     tier: 'free',
                     remainingRequests: 10,
-                    remainingTokens: d.balance * 1000,
+                    remainingTokens: d.balance,
                     limitRequests: 10,
-                    limitTokens: 20 * 1000
+                    limitTokens: 20
                 };
                 if (typeof window !== "undefined") {
                     window.dispatchEvent(new CustomEvent('userTierUpdate', { detail: userInfo }));
@@ -733,16 +733,7 @@ class DeepInfra extends Client {
     }
 }
 
-class Worker extends Client {
-    constructor(options = {}) {
-        super({
-            baseUrl: 'https://g4f.dev/api/worker',
-            useModelName: true,
-            sleep: 10000,
-            ...options
-        });
-    }
-}
+class Worker extends Client {}
 
 class Together extends Client {
     constructor(options = {}) {

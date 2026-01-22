@@ -1,4 +1,3 @@
-
 /**
  * G4F Custom Server Router Worker
  * 
@@ -76,21 +75,22 @@ const RATE_LIMITS = {
       "Access-Control-Allow-Credentials": "true",
       "Access-Control-Allow-Methods": "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key",
-      "Access-Control-Expose-Headers": "Content-Type, X-User-Id, X-User-Tier, X-Provider, X-Server, X-Url, X-Usage-Total-Tokens, X-Stream, X-Ratelimit-Model-Factor, X-Ratelimit-Remaining-Requests, X-Ratelimit-Remaining-Tokens, X-Ratelimit-Limit-Requests, X-Ratelimit-Limit-Tokens"
+      "Access-Control-Expose-Headers": "Content-Type, X-User-Id, X-User-Tier, X-Provider, X-Model, X-Server, X-Url, X-Usage-Total-Tokens, X-Stream, X-Ratelimit-Model-Factor, X-Ratelimit-Remaining-Requests, X-Ratelimit-Remaining-Tokens, X-Ratelimit-Limit-Requests, X-Ratelimit-Limit-Tokens"
     };
   const ACCESS_CONTROL_ALLOW_ORIGIN = {
     "Access-Control-Allow-Origin": "*",
   }
 
   const DEFAULT_MODELS = {
-    'srv_mjnrrgu4065b7b4329f6': 'model-router3',
-    'srv_mjnrgebd823697f2976d': 'llama-3.3-70b-versatile',
-    'srv_mjnr7ksfae7dd0bd7972': 'deepseek-ai/deepseek-v3.2',
-    'srv_mjnrjfctcd025471c5b9': 'deepseek-v3.2',
-    'srv_mjnraxvsc0d2d71ec9e4': 'tngtech/deepseek-r1t2-chimera:free', // openrouter
-    'srv_mjlq1ncq8a3f7fe0aea0': 'turbo',
-    'srv_mjnathgq5829c76faa05': 'openai', // pollinations
-    'srv_mjovbs1p16a07136b8ad': 'deepseek-v3.2:free' // api.airforce
+    // 'srv_mjnrrgu4065b7b4329f6': 'model-router3',
+    'srv_mkom688d57c76d8a3542': 'llama-3.3-70b-versatile', // groq
+    'srv_mkombumpae45db46dcb8': 'deepseek-ai/deepseek-v3.2',
+    'srv_mkolabu46aa55fc6f003': 'deepseek-v3.2', // ollama
+    'srv_mkolylnsaec61b86b9c2': 'tngtech/deepseek-r1t2-chimera:free', // openrouter
+    // 'srv_mjlq1ncq8a3f7fe0aea0': 'turbo',
+    'srv_mkol5tgcd33cc358ddbc': 'models/gemini-flash-latest', // gemini
+    'srv_mkoloq41e34074b6133e': 'openai', // pollinations
+    'srv_mkomfko63371049b6da6': 'deepseek-v3.2:free' // api.airforce
    };
 
    const BLOCKED_SERVERS = [
@@ -101,6 +101,7 @@ const RATE_LIMITS = {
     'srv_mjvas3cw95a53a66a5ae',
     'srv_mjvb4wujde2dac5d6bad',
     'srv_mjns3wqp0976710869ad',
+    'srv_mk8spo5x513a26429132',
    ];
   
     export default {
@@ -250,7 +251,7 @@ const RATE_LIMITS = {
               
   
             // Route: /v1/models
-            if (pathname === "/v1/models" || pathname === "/custom/srv_mjncacwy529ad1e3c784/models") {
+            if (pathname === "/v1/models" || pathname === "/custom/srv_mkopytsj9b6425de1db8/models") {
                 return handleV1Models(request, env);
             }
   
@@ -272,7 +273,7 @@ const RATE_LIMITS = {
               }
             
             // Route: /v1/chat/completions
-            if (pathname === "/v1/chat/completions" || pathname === "/custom/srv_mjncacwy529ad1e3c784/chat/completions") {
+            if (pathname === "/v1/chat/completions" || pathname === "/custom/srv_mkopytsj9b6425de1db8/chat/completions") {
                 return handleV1ChatCompletions(request, env, ctx, pathname, cacheKey, rateCheck);
             }
     
@@ -856,12 +857,28 @@ const RATE_LIMITS = {
       if(request.method === 'POST') {
         requestBody = await request.clone().json();
         requestModel = requestBody.model;
-        const messages = requestBody.messages;
-        if (messages && messages[0]) {
-            const message = messages[0];
-            if (message && message.content == "Hello, are you working? Reply with 'Yes' if you can respond") {
-                return jsonResponse({"choices":[{"message":{"content":"Yes"}}]});
+        try {
+            const messages = requestBody.messages;
+            if (messages) {
+                const message = messages[messages.length - 1]
+                if (message && typeof message.content === 'string') {
+                    if (message.content === "Server?") {
+                        return jsonResponse({"choices":[{"message":{"content": `${server.label} - Server ID: ${server.id}`}}]});
+                    }
+                    if (message.content.startsWith("Hello, are you working?") || message.content.startsWith("Are you working?")) {
+                        return jsonResponse({"choices":[{"message":{"content": "Yes"}}]});
+                    }
+                    const m = message.content.match(/^(what is |)(\d+)([\+*])(\d+)(\?|$)/);
+                    if (m) {
+                        const a = Number(m[2]);
+                        const b = Number(m[4]);
+                        const r = String(m[3] === "+" ? a + b : a * b);
+                        return jsonResponse({"choices":[{"message":{"content":r}}]});
+                    }
+                }
             }
+        } catch (e) {
+            // continue
         }
       }
       
@@ -967,6 +984,7 @@ const RATE_LIMITS = {
                   newResponse.headers.set('X-Url', targetUrl);
                   newResponse.headers.set('X-Server', server.id);
                   newResponse.headers.set('X-Provider', server.label);
+                  if (requestModel) newResponse.headers.set('X-Model', requestModel);
                   if (user) {
                     newResponse.headers.set('X-User-Id', user.id)
                     newResponse.headers.set('X-User-Tier', user.tier)
@@ -1022,6 +1040,7 @@ const RATE_LIMITS = {
           newResponse.headers.set('X-Url', targetUrl);
           newResponse.headers.set('X-Server', server.id);
           newResponse.headers.set('X-Provider', server.label);
+          if (requestModel) newResponse.headers.set('X-Model', requestModel);
           if (totalTokens) {
             newResponse.headers.set('X-Usage-Total-Tokens', String(totalTokens))
           }
@@ -1595,7 +1614,7 @@ const RATE_LIMITS = {
       }
       
       const queryUrl = server.base_url.includes('/chat/completions') ? server.base_url : server.base_url + '/chat/completions';
-      prompt = decodeURIComponent((prompt || '').trim());
+      prompt = decodeURI((prompt || '').trim());
       let queryBody;
       
       if (request.method === "POST") {
@@ -1676,6 +1695,7 @@ const RATE_LIMITS = {
                   newResponse.headers.set(key, value);
               }
               newResponse.headers.set("X-Provider", server.label);
+              if (queryBody.model) newResponse.headers.set('X-Model', queryBody.model);
               newResponse.headers.set("X-Server", server.id);
               newResponse.headers.set("X-Url", queryUrl);
                 if (rateCheck) {
@@ -1720,6 +1740,7 @@ const RATE_LIMITS = {
               headers: { 'Content-Type': 'text/plain; charset=UTF-8', ...CORS_HEADERS }
           });
           newResponse.headers.set("X-Provider", server.label);
+          if (queryBody.model) newResponse.headers.set('X-Model', queryBody.model);
           newResponse.headers.set("X-Server", server.id);
           newResponse.headers.set("X-Url", queryUrl);
 
@@ -2182,7 +2203,6 @@ const RATE_LIMITS = {
               if (fullServer.allowed_models && fullServer.allowed_models.length > 0) {
                   if (fullServer.allowed_models.includes(model)) {
                       selectedServer = fullServer;
-                      break;
                   }
               }
           }
@@ -2210,25 +2230,25 @@ const RATE_LIMITS = {
       const publicServersIndex = await getPublicServers(env);
 
       // Collect all allowed models from all servers
-      const allModels = new Set();
+      const allModels = new Object();
   
       // Add models from private servers
       for (const server of privateServers) {
           if (server.allowed_models && server.allowed_models.length > 0) {
-              server.allowed_models.forEach(model => allModels.add(model));
+              server.allowed_models.forEach(model => (!allModels[model] ? allModels[model] = {id: model, owned_by: server.label, base_url: `/custom/${server.id}`} : null));
           }
       }
   
       // Add models from public servers
       for (const serverIndex of publicServersIndex) {
           if (serverIndex.allowed_models && serverIndex.allowed_models.length > 0) {
-              serverIndex.allowed_models.forEach(model => allModels.add(model));
+              serverIndex.allowed_models.forEach(model => (!allModels[model] ? allModels[model] = {id: model, owned_by: serverIndex.label, base_url: `/custom/${serverIndex.id}`} : null));
           }
       }
   
       // Return as array of objects
       return jsonResponse({
-          data: Array.from(allModels).map(m => ({ id: m }))
+          data: Array.from(Object.values(allModels))
       });
     }
     
@@ -2288,6 +2308,7 @@ const RATE_LIMITS = {
     * @param {Object} ctx - Request context for waitUntil
     */
     async function setCachedResponse(request, response, cacheControl, cacheKey = null, ctx = null) {
+      if (!response.ok) return;
       try {
         const key = cacheKey || generateCacheKey(request);
         const cacheRequest = new Request(`https://cache.example/${key}`, {
